@@ -1388,12 +1388,14 @@ dependencies = [
 name = "half-baked-client"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "crossbeam",
  "rand 0.8.5",
  "rayon",
  "reqwest",
  "solana-ledger",
  "solana-sdk 1.14.13",
+ "thiserror",
  "tokio",
 ]
 

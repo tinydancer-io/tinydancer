@@ -25,12 +25,25 @@
 //! }
 //! })
 #![feature(async_closure)]
+#![allow(unused_imports)]
+#![allow(dead_code)]
 mod tinydancer;
+use std::io;
+
 use tinydancer::{RpcEndpoint, TinyDancer};
 mod sampler;
+mod ui;
 
 #[tokio::main]
 async fn main() {
     let sampler = TinyDancer::new(RpcEndpoint::Localnet).await;
     sampler.join().await;
+}
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum ClientError {
+    #[error("error in sample service")]
+    SampleServiceError(String),
 }
