@@ -30,20 +30,16 @@
 mod tinydancer;
 use std::io;
 
-use tinydancer::{RpcEndpoint, TinyDancer};
+use tinydancer::{Cluster, TinyDancer, TinyDancerConfig};
 mod sampler;
-mod ui;
+// mod ui;
 
 #[tokio::main]
 async fn main() {
-    let sampler = TinyDancer::new(RpcEndpoint::Localnet).await;
-    sampler.join().await;
-}
-
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum ClientError {
-    #[error("error in sample service")]
-    SampleServiceError(String),
+    let config = TinyDancerConfig {
+        rpc_endpoint: Cluster::Localnet,
+        sample_qty: 10,
+    };
+    let client = TinyDancer::new(config).await;
+    client.join().await;
 }

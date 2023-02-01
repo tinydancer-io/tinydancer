@@ -23,45 +23,46 @@ use std::{
 };
 use tokio::task::JoinError;
 
-use crate::{
-    tinydancer::{GenericService, RpcEndpoint},
-    ClientError,
-};
+use crate::tinydancer::{ClientService, Cluster};
 
 pub struct SampleService {
-    sample_index: Uniform<u64>,
+    sample_indices: Vec<u64>,
     // peers: Vec<(Pubkey, SocketAddr)>,
     sampler_handle: tokio::task::JoinHandle<()>,
 }
 pub struct SampleServiceConfig {
-    pub rpc_endpoint: RpcEndpoint,
+    pub rpc_endpoint: Cluster,
 }
 
 #[async_trait]
-impl GenericService<SampleServiceConfig> for SampleService {
+impl ClientService<SampleServiceConfig> for SampleService {
+    type ServiceError = tokio::task::JoinError;
     fn new(config: SampleServiceConfig) -> Self {
         let sampler_handle = tokio::spawn(async {
             //add algo here
 
-            tokio::time::sleep(tokio::time::Duration::from_millis(3000)).await;
+            for _ in 0..10 {
+                println!("running");
+                tokio::time::sleep(tokio::time::Duration::from_millis(3000)).await;
+            }
         });
-        let sample_index = Uniform::from(0..1000);
+        let sample_indices: Vec<u64> = Vec::default();
         Self {
             sampler_handle,
-            sample_index,
+            sample_indices,
         }
     }
-    async fn join<ClientError>(self) -> std::result::Result<(), ClientError> {
-        match self.sampler_handle.await {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                println!("error: {}", e);
-                ClientError::SampleServiceError(""))
-            }
-        }
+    async fn join(self) -> std::result::Result<(), Self::ServiceError> {
+        self.sampler_handle.await
     }
 }
-
+pub fn gen_random_indices(max_shreds_per_slot: u64, sample_qty: u64) -> Vec<u64> {
+    let mut rng = StdRng::from_entropy();
+    let vec = (0..max_shreds_per_slot)
+        .map(|_| rng.gen())
+        .collect::<Vec<u64>>();
+    vec.as_slice()[0..(sample_qty as usize)].to_vec()
+}
 // fn sample<R: Rng>(
 //     &self,
 //     rng: &mut R,
