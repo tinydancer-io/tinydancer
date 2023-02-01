@@ -32,7 +32,7 @@ impl TinyDancer {
             sample_qty,
         } = config;
         let config = SampleServiceConfig {
-            rpc_endpoint: rpc_endpoint.clone(),
+            cluster: rpc_endpoint.clone(),
         };
         let sampler = SampleService::new(config);
 
@@ -43,7 +43,10 @@ impl TinyDancer {
         }
     }
     pub async fn join(self) {
-        self.sampler.join().await.expect("error");
+        self.sampler
+            .join()
+            .await
+            .expect("error in sample service thread");
     }
 }
 
