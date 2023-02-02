@@ -22,4 +22,5 @@ serde="1.0.152"
 serde_json="1.0.91"
 serde_derive="1.0.152"
 futures = "0.1.28"
-rbatis = "4.0.49"
+crossterm = "0.26.0"
+diesel = { version = "2.0.3", features = ["sqlite"] }

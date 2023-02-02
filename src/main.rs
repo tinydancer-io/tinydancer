@@ -33,7 +33,7 @@ use std::io;
 use tinydancer::{Cluster, TinyDancer, TinyDancerConfig};
 mod macros;
 mod sampler;
-// mod ui;
+mod ui;
 
 #[tokio::main]
 async fn main() {

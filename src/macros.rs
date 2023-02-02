@@ -9,6 +9,13 @@ macro_rules! convert_to_websocket {
     };
 }
 #[macro_export]
+macro_rules! block_on {
+    ($func:expr,$error:expr) => {
+        let rt = Runtime::new().unwrap();
+        rt.handle().block_on($func).expect($error);
+    };
+}
+#[macro_export]
 macro_rules! send_rpc_call {
     ($url:expr, $body:expr) => {{
         let req_client = reqwest::Client::new();

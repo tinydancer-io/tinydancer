@@ -4,10 +4,14 @@
 use std::thread::Result;
 
 // use tokio::time::Duration;
-use crate::sampler::{SampleService, SampleServiceConfig};
+use crate::{
+    block_on,
+    sampler::{SampleService, SampleServiceConfig},
+    ui::{UiConfig, UiService},
+};
 use async_trait::async_trait;
 use std::error::Error;
-use tokio::task::JoinError;
+use tokio::{runtime::Runtime, task::JoinError};
 // use std::{thread, thread::JoinHandle, time::Duration};
 
 #[async_trait]
@@ -18,7 +22,8 @@ pub trait ClientService<T> {
 }
 pub struct TinyDancer {
     rpc_endpoint: Cluster,
-    sampler: SampleService,
+    sample_service: SampleService,
+    ui_service: UiService,
     sample_qty: u64,
 }
 pub struct TinyDancerConfig {
@@ -31,22 +36,24 @@ impl TinyDancer {
             rpc_endpoint,
             sample_qty,
         } = config;
-        let config = SampleServiceConfig {
+        let sample_service_config = SampleServiceConfig {
             cluster: rpc_endpoint.clone(),
         };
-        let sampler = SampleService::new(config);
-
+        let sample_service = SampleService::new(sample_service_config);
+        let ui_service = UiService::new(UiConfig {});
         Self {
+            ui_service,
             sample_qty,
             rpc_endpoint,
-            sampler,
+            sample_service,
         }
     }
     pub async fn join(self) {
-        self.sampler
+        self.sample_service
             .join()
             .await
             .expect("error in sample service thread");
+        block_on!(async { self.ui_service.join().await }, "Ui Service Error");
     }
 }
 
