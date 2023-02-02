@@ -941,9 +941,9 @@ dependencies = [
 
 [[package]]
 name = "cxx"
-version = "1.0.88"
+version = "1.0.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "322296e2f2e5af4270b54df9e85a02ff037e271af20ba3e7fe1575515dc840b8"
+checksum = "bc831ee6a32dd495436e317595e639a587aa9907bef96fe6e6abc290ab6204e9"
 dependencies = [
  "cc",
  "cxxbridge-flags",
@@ -953,9 +953,9 @@ dependencies = [
 
 [[package]]
 name = "cxx-build"
-version = "1.0.88"
+version = "1.0.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "017a1385b05d631e7875b1f151c9f012d37b53491e2a87f65bff5c262b2111d8"
+checksum = "94331d54f1b1a8895cd81049f7eaaaef9d05a7dcb4d1fd08bf3ff0806246789d"
 dependencies = [
  "cc",
  "codespan-reporting",
@@ -968,15 +968,15 @@ dependencies = [
 
 [[package]]
 name = "cxxbridge-flags"
-version = "1.0.88"
+version = "1.0.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c26bbb078acf09bc1ecda02d4223f03bdd28bd4874edcb0379138efc499ce971"
+checksum = "48dcd35ba14ca9b40d6e4b4b39961f23d835dbb8eed74565ded361d93e1feb8a"
 
 [[package]]
 name = "cxxbridge-macro"
-version = "1.0.88"
+version = "1.0.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "357f40d1f06a24b60ae1fe122542c1fb05d28d32acb2aed064e84bc2ad1e252e"
+checksum = "81bbeb29798b407ccd82a3324ade1a7286e0d29851475990b612670f6f5124d2"
 dependencies = [
  "proc-macro2 1.0.50",
  "quote 1.0.23",
@@ -1537,9 +1537,9 @@ dependencies = [
 
 [[package]]
 name = "heck"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2540771e65fc8cb83cd6e8a237f70c319bd5c29f78ed1084ba5d50eeac86f7f9"
+checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 
 [[package]]
 name = "hermit-abi"
@@ -2098,9 +2098,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniz_oxide"
-version = "0.6.2"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b275950c28b37e794e8c55d88aeb5e139d0ce23fdbbeda68f8d7174abdf9e8fa"
+checksum = "f2e212582ede878b109755efd0773a4f0f4ec851584cf0aefbeb4d9ecc114822"
 dependencies = [
  "adler",
 ]
@@ -3287,7 +3287,7 @@ dependencies = [
 [[package]]
 name = "solana-account-decoder"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "Inflector",
  "base64 0.13.1",
@@ -3310,7 +3310,7 @@ dependencies = [
 [[package]]
 name = "solana-address-lookup-table-program"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -3330,7 +3330,7 @@ dependencies = [
 [[package]]
 name = "solana-bpf-loader-program"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "bincode",
  "byteorder",
@@ -3348,7 +3348,7 @@ dependencies = [
 [[package]]
 name = "solana-bucket-map"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "log",
  "memmap2",
@@ -3362,7 +3362,7 @@ dependencies = [
 [[package]]
 name = "solana-compute-budget-program"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "solana-program-runtime",
  "solana-sdk 1.15.0",
@@ -3371,7 +3371,7 @@ dependencies = [
 [[package]]
 name = "solana-config-program"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "bincode",
  "chrono",
@@ -3384,7 +3384,7 @@ dependencies = [
 [[package]]
 name = "solana-entry"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "bincode",
  "crossbeam-channel",
@@ -3440,7 +3440,7 @@ dependencies = [
 [[package]]
 name = "solana-frozen-abi"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "ahash",
  "blake3",
@@ -3485,7 +3485,7 @@ dependencies = [
 [[package]]
 name = "solana-frozen-abi-macro"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "proc-macro2 1.0.50",
  "quote 1.0.23",
@@ -3496,7 +3496,7 @@ dependencies = [
 [[package]]
 name = "solana-ledger"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -3566,7 +3566,7 @@ dependencies = [
 [[package]]
 name = "solana-logger"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "env_logger",
  "lazy_static",
@@ -3576,7 +3576,7 @@ dependencies = [
 [[package]]
 name = "solana-measure"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "log",
  "solana-sdk 1.15.0",
@@ -3585,7 +3585,7 @@ dependencies = [
 [[package]]
 name = "solana-merkle-tree"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "fast-math",
  "matches",
@@ -3595,7 +3595,7 @@ dependencies = [
 [[package]]
 name = "solana-metrics"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "crossbeam-channel",
  "gethostname",
@@ -3608,7 +3608,7 @@ dependencies = [
 [[package]]
 name = "solana-perf"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "ahash",
  "bincode",
@@ -3683,7 +3683,7 @@ dependencies = [
 [[package]]
 name = "solana-program"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -3735,7 +3735,7 @@ dependencies = [
 [[package]]
 name = "solana-program-runtime"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "base64 0.13.1",
  "bincode",
@@ -3762,7 +3762,7 @@ dependencies = [
 [[package]]
 name = "solana-rayon-threadlimit"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "lazy_static",
  "num_cpus",
@@ -3771,7 +3771,7 @@ dependencies = [
 [[package]]
 name = "solana-runtime"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "arrayref",
  "bincode",
@@ -3884,7 +3884,7 @@ dependencies = [
 [[package]]
 name = "solana-sdk"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "assert_matches",
  "base64 0.13.1",
@@ -3948,7 +3948,7 @@ dependencies = [
 [[package]]
 name = "solana-sdk-macro"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "bs58",
  "proc-macro2 1.0.50",
@@ -3960,7 +3960,7 @@ dependencies = [
 [[package]]
 name = "solana-stake-program"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "bincode",
  "log",
@@ -3974,7 +3974,7 @@ dependencies = [
 [[package]]
 name = "solana-storage-bigtable"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "backoff",
  "bincode",
@@ -4007,7 +4007,7 @@ dependencies = [
 [[package]]
 name = "solana-storage-proto"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "bincode",
  "bs58",
@@ -4023,7 +4023,7 @@ dependencies = [
 [[package]]
 name = "solana-transaction-status"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "Inflector",
  "base64 0.13.1",
@@ -4048,7 +4048,7 @@ dependencies = [
 [[package]]
 name = "solana-vote-program"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "bincode",
  "log",
@@ -4069,7 +4069,7 @@ dependencies = [
 [[package]]
 name = "solana-zk-token-proof-program"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "bytemuck",
  "getrandom 0.1.16",
@@ -4114,7 +4114,7 @@ dependencies = [
 [[package]]
 name = "solana-zk-token-sdk"
 version = "1.15.0"
-source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#5ed829fce588e9c693c2e2e18b7ea591cc7edcfa"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#845ae5316a1425d362e88d29961430d3ab14c3b0"
 dependencies = [
  "aes-gcm-siv",
  "arrayref",
@@ -4294,9 +4294,9 @@ dependencies = [
 
 [[package]]
 name = "sync_wrapper"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20518fe4a4c9acf048008599e464deb21beeae3d3578418951a189c235a7a9a8"
+checksum = "2047c6ded9c721764247e62cd3b03c09ffc529b2ba5b10ec482ae507a4a70160"
 
 [[package]]
 name = "synstructure"
@@ -5143,9 +5143,9 @@ dependencies = [
 
 [[package]]
 name = "zstd-sys"
-version = "2.0.5+zstd.1.5.2"
+version = "2.0.6+zstd.1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edc50ffce891ad571e9f9afe5039c4837bede781ac4bb13052ed7ae695518596"
+checksum = "68a3f9792c0c3dc6c165840a75f47ae1f4da402c2d006881129579f6597e801b"
 dependencies = [
  "cc",
  "libc",

@@ -21,30 +21,33 @@ pub trait ClientService<T> {
     async fn join(self) -> std::result::Result<(), Self::ServiceError>;
 }
 pub struct TinyDancer {
-    rpc_endpoint: Cluster,
     sample_service: SampleService,
     ui_service: UiService,
     sample_qty: u64,
+    config: TinyDancerConfig,
 }
+#[derive(Clone)]
 pub struct TinyDancerConfig {
     pub rpc_endpoint: Cluster,
     pub sample_qty: u64,
+    pub enable_ui_service: bool,
 }
 impl TinyDancer {
     pub async fn new(config: TinyDancerConfig) -> Self {
         let TinyDancerConfig {
+            enable_ui_service,
             rpc_endpoint,
             sample_qty,
-        } = config;
+        } = config.clone();
         let sample_service_config = SampleServiceConfig {
             cluster: rpc_endpoint.clone(),
         };
         let sample_service = SampleService::new(sample_service_config);
         let ui_service = UiService::new(UiConfig {});
         Self {
+            config,
             ui_service,
             sample_qty,
-            rpc_endpoint,
             sample_service,
         }
     }
@@ -53,7 +56,9 @@ impl TinyDancer {
             .join()
             .await
             .expect("error in sample service thread");
-        block_on!(async { self.ui_service.join().await }, "Ui Service Error");
+        if self.config.enable_ui_service {
+            block_on!(async { self.ui_service.join().await }, "Ui Service Error");
+        }
     }
 }
 

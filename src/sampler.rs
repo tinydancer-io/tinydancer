@@ -3,11 +3,13 @@ use crossbeam::channel::{Receiver, Sender};
 use futures::{AsyncSink, Sink};
 use rand::distributions::Uniform;
 use rand::prelude::*;
+use rayon::prelude::*;
 use reqwest::Request;
 use solana_ledger::{
     ancestor_iterator::{AncestorIterator, AncestorIteratorWithHash},
     blockstore::Blockstore,
-    shred::{Nonce, Shred, ShredFetchStats, SIZE_OF_NONCE},
+    blockstore_db::columns::ShredCode,
+    shred::{Nonce, Shred, ShredData, ShredFetchStats, SIZE_OF_NONCE},
 };
 use solana_sdk::{
     clock::Slot,
@@ -31,8 +33,8 @@ use tokio::{
 use tungstenite::{connect, Message};
 use url::Url;
 
-use crate::convert_to_websocket;
 use crate::tinydancer::{endpoint, ClientService, Cluster};
+use crate::{convert_to_websocket, send_rpc_call};
 pub struct SampleService {
     sample_indices: Vec<u64>,
     // peers: Vec<(Pubkey, SocketAddr)>,
@@ -50,15 +52,16 @@ impl ClientService<SampleServiceConfig> for SampleService {
             let rpc_url = endpoint(config.cluster);
             let pub_sub = convert_to_websocket!(rpc_url);
             let mut threads = Vec::default();
-            println!("log {}", pub_sub);
-            let (slot_update_tx, slot_update_rx) = crossbeam::channel::unbounded::<u64>();
 
+            let (slot_update_tx, slot_update_rx) = crossbeam::channel::unbounded::<u64>();
+            let (shred_tx, shred_rx) = crossbeam::channel::unbounded();
             threads.push(tokio::spawn(slot_update_loop(slot_update_tx, pub_sub)));
-            threads.push(tokio::spawn(async move {
-                while let Ok(slot) = slot_update_rx.recv() {
-                    println!("GOT = {}", slot);
-                }
-            }));
+            threads.push(tokio::spawn(shred_update_loop(
+                slot_update_rx,
+                rpc_url,
+                shred_tx,
+            )));
+            threads.push(tokio::spawn(shred_verify_loop(shred_rx)));
 
             for thread in threads {
                 thread.await;
@@ -74,12 +77,23 @@ impl ClientService<SampleServiceConfig> for SampleService {
         self.sampler_handle.await
     }
 }
-pub fn gen_random_indices(max_shreds_per_slot: u64, sample_qty: u64) -> Vec<u64> {
+pub fn gen_random_indices(max_shreds_per_slot: usize, sample_qty: usize) -> Vec<usize> {
     let mut rng = StdRng::from_entropy();
     let vec = (0..max_shreds_per_slot)
         .map(|_| rng.gen())
-        .collect::<Vec<u64>>();
+        .collect::<Vec<usize>>();
     vec.as_slice()[0..(sample_qty as usize)].to_vec()
+}
+pub async fn request_shreds(
+    slot: usize,
+    indices: Vec<usize>,
+    endpoint: String,
+) -> Result<GetShredResponse, serde_json::Error> {
+    let request = serde_json::json!(  {"jsonrpc": "2.0","id":1,"method":"getShreds","params":[slot,&indices]}) // getting one shred just to get max shreds per slot, can maybe randomize the selection here
+        .to_string();
+    let res = send_rpc_call!(endpoint, request);
+
+    serde_json::from_str::<GetShredResponse>(res.as_str())
 }
 // fn sample<R: Rng>(
 //     &self,
@@ -106,12 +120,12 @@ async fn slot_update_loop(tx: Sender<u64>, pub_sub: String) {
                 let res = serde_json::from_str::<SlotSubscribeResponse>(msg.to_string().as_str());
                 // println!("res: {:?}", msg.to_string().as_str());
                 if let Ok(res) = res {
-                    match tx.send(res.params.result.slot as u64) {
+                    match tx.send(res.params.result.root as u64) {
                         Ok(r) => {
                             println!("sent mssg:{:?}", r);
                         }
                         Err(e) => {
-                            println!("error here: {:?}", e);
+                            println!("error here: {:?} {:?}", e, res.params.result.root as u64);
                             continue; // @TODO: we should add retries here incase send fails for some reason
                         }
                     }
@@ -122,6 +136,64 @@ async fn slot_update_loop(tx: Sender<u64>, pub_sub: String) {
     }
 }
 
+async fn shred_update_loop(
+    slot_update_rx: Receiver<u64>,
+    endpoint: String,
+    shred_tx: Sender<Vec<Shred>>,
+) {
+    loop {
+        if let Ok(slot) = slot_update_rx.recv() {
+            let shred_for_one = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
+            let shred_indices_for_slot = match shred_for_one {
+                Ok(first_shred) => {
+                    let first_shred = &first_shred.result[0];
+                    let max_shreds_per_slot = if first_shred.is_data() {
+                        Some(
+                            first_shred
+                                .num_data_shreds()
+                                .expect("num data shreds error"),
+                        )
+                    } else if first_shred.is_code() {
+                        Some(
+                            first_shred
+                                .num_coding_shreds()
+                                .expect("num coding shreds error"),
+                        )
+                    } else {
+                        None
+                    };
+
+                    println!("{:?}", max_shreds_per_slot);
+
+                    let indices = gen_random_indices(max_shreds_per_slot.unwrap() as usize, 10); // unwrap only temporary
+                    Some(indices)
+                }
+                Err(_) => {
+                    //@TODO: add logger here
+
+                    None
+                }
+            };
+            if let Some(shred_indices_for_slot) = shred_indices_for_slot {
+                let shreds_for_slot =
+                    request_shreds(slot as usize, shred_indices_for_slot, endpoint.clone()).await;
+                if let Ok(shreds_for_slot) = shreds_for_slot {
+                    shred_tx
+                        .send(shreds_for_slot.result)
+                        .expect("shred tx send error");
+                }
+            }
+        }
+    }
+}
+
+pub async fn shred_verify_loop(shred_rx: Receiver<Vec<Shred>>) {
+    loop {
+        if let Ok(shreds) = shred_rx.recv() {
+            shreds.par_iter().for_each(|sh| println!("{:?}", sh.id()));
+        }
+    }
+}
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
@@ -130,20 +202,37 @@ use serde_derive::Serialize;
 pub struct SlotSubscribeResponse {
     pub jsonrpc: String,
     pub method: String,
-    pub params: Params,
+    pub params: SlotSubscribeParams,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Params {
-    pub result: Result,
+pub struct SlotSubscribeParams {
+    pub result: SlotSubscribeResult,
     pub subscription: i64,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Result {
+pub struct SlotSubscribeResult {
     pub parent: i64,
     pub root: i64,
     pub slot: i64,
 }
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetShredResponse {
+    pub jsonrpc: String,
+    pub result: Vec<Shred>,
+    pub id: i64,
+}
+
+// #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct GetShredResult {
+//     #[serde(rename = "ShredData")]
+//     pub shred_data: Option<ShredData>,
+//     #[serde(rename = "ShredCode")]
+//     pub shred_code: Option<ShredCode>,
+// }

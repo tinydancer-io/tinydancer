@@ -38,6 +38,7 @@ mod ui;
 #[tokio::main]
 async fn main() {
     let config = TinyDancerConfig {
+        enable_ui_service: false,
         rpc_endpoint: Cluster::Localnet,
         sample_qty: 10,
     };

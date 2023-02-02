@@ -18,14 +18,19 @@ macro_rules! block_on {
 #[macro_export]
 macro_rules! send_rpc_call {
     ($url:expr, $body:expr) => {{
+        use reqwest::header::{ACCEPT, CONTENT_TYPE};
         let req_client = reqwest::Client::new();
         let res = req_client
             .post($url)
-            .body(body)
+            .body($body)
+            .header(CONTENT_TYPE, "application/json")
+            .header(ACCEPT, "application/json")
             .send()
-            .await?
+            .await
+            .expect("error")
             .text()
-            .await?;
+            .await
+            .expect("error");
         res
     }};
 }
