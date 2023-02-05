@@ -1,5 +1,5 @@
 [package]
-name = "half-baked-client"
+name = "tinydancer"
 version = "0.1.0"
 edition = "2021"
 
@@ -28,3 +28,4 @@ diesel = { version = "2.0.3", features = ["sqlite"] }
 # log = "0.4.17"
 # log4rs = "1.2.0"
 tiny-logger={path="../logger"}
+solana-metrics="1.15.0"

@@ -9,7 +9,9 @@ lazy_static! {
     static ref LOGGER: Arc<RwLock<env_logger::Logger>> =
         Arc::new(RwLock::new(env_logger::Logger::from_default_env()));
 }
-
+pub mod logs {
+    pub use log::*;
+}
 struct LoggerShim {}
 
 impl log::Log for LoggerShim {
