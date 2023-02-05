@@ -1,26 +1,2 @@
-[package]
-name = "half-baked-client"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-tokio = {version="1.25.0", features=["full"] }
-solana-ledger={git="https://github.com/tinydancer-io/diet-rpc-validator", branch="master"}
-crossbeam = {version="0.8.2", features=["crossbeam-channel"]}
-solana-sdk = "1.14.13"
-reqwest = "0.11.14"
-rayon = "1.6.1"
-rand = "0.8.5"
-async-trait = "0.1.64"
-thiserror = "1.0.38"
-tungstenite = "0.18.0"
-tui = "0.19.0"
-url="2.2.2"
-serde="1.0.152"
-serde_json="1.0.91"
-serde_derive="1.0.152"
-futures = "0.1.28"
-crossterm = "0.26.0"
-diesel = { version = "2.0.3", features = ["sqlite"] }
+[workspace]
+members=["tinydancer","logger"]
