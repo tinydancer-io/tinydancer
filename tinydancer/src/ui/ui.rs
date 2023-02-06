@@ -30,8 +30,11 @@ pub struct UiService {
 
 pub struct App {
     title: String,
+    tabs: TabsState,
     table: TableState,
     slot_list: StatefulList<(String, usize)>,
+    peers_list: StatefulList<Vec<String>>,
+    full_nodes_list: StatefulList<Vec<String>>
 }
 
 // pub struct SlotList {
@@ -80,18 +83,84 @@ impl<T> StatefulList<T> {
         self.state.select(None);
     }
 }
-impl App {}
-pub struct UiConfig {}
 
+pub struct TabsState {
+    pub titles: Vec<String>,
+    pub index: usize,
+}
+impl TabsState {
+    pub fn new(titles: Vec<String>) -> TabsState {
+        TabsState { titles, index: 0 }
+    }
+    pub fn next(&mut self) {
+        self.index = (self.index + 1) % self.titles.len();
+    }
+
+    pub fn previous(&mut self) {
+        if self.index > 0 {
+            self.index -= 1;
+        }
+        else {
+            self.index = self.titles.len() - 1;
+        }
+    }
+}
+pub struct UiConfig {}
+// main draw function
 pub fn draw<B: Backend>(f: &mut Frame<B>) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+        .constraints([Constraint::Percentage(20), Constraint::Percentage(40), Constraint::Percentage(40)].as_ref())
         .split(f.size());
+
+
+
+
 }
-pub fn draw_slot_list<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
-    let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-    let normal_style = Style::default().bg(Color::LightBlue);
+
+fn draw_first_tab<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
+where
+    B: Backend,
+{
+    let chunks = Layout::default()
+        .constraints(
+            [
+                Constraint::Length(20),
+                Constraint::Length(3),
+                Constraint::Length(2),
+            ]
+            .as_ref(),
+        )
+        .split(area);
+
+    //ui(f, app, chunks[0]);
+    draw_slot_list(f, app, chunks[0]);
+    
+}
+fn draw_second_tab<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
+where
+    B: Backend,
+{
+    let chunks = Layout::default()
+        .constraints(
+            [
+                Constraint::Length(20),
+                Constraint::Length(3),
+                Constraint::Length(2),
+            ]
+            .as_ref(),
+        )
+        .split(area);
+     //todo: Draw network usage metrics here
+        todo!()
+}
+
+
+
+// draws list of slots
+fn draw_slot_list<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+    // let selected_style = Style::default().add_modifier(Modifier::REVERSED);
+    // let normal_style = Style::default().bg(Color::LightBlue);
     let items: Vec<ListItem> = app
         .slot_list
         .items
@@ -100,6 +169,7 @@ pub fn draw_slot_list<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
             let mut lines = vec![Spans::from(i.0.clone())];
             for _ in 0..i.1 {
                 lines.push(Spans::from(Span::styled(
+                    // dummy values in list that would be replaced by slot numbers
                     "slots 1",
                     Style::default().add_modifier(Modifier::ITALIC),
                 )));
@@ -111,6 +181,14 @@ pub fn draw_slot_list<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
             .block(Block::default().borders(Borders::ALL).title("SLOTS"))
             .highlight_style(Style::default().bg(Color::Cyan).add_modifier(Modifier::BOLD))
             .highlight_symbol(">>");
+    f.render_stateful_widget(list, area, &mut app.slot_list.state);
+    // let peers_list: Vec<ListItem> = app
+    //     .peers_list
+    //     .items
+    //     .iter()
+    //     .map(|i|{
+        
+    //     })     
           
 }
 
