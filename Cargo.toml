@@ -1,2 +1,2 @@
 [workspace]
-members=["tinydancer","logger"]
+members=["tinydancer","logger","gossip"]
