@@ -6,3 +6,10 @@ The client is designed to be modular and easily extensible for additional functi
 ### Bird's Eye View
 
 ![Architecture Diagram](https://res.cloudinary.com/dev-connect/image/upload/v1675235495/diet-client-v0-arch_bhdd4c.png)
+
+## Getting started
+
+Build and add to path
+```
+cargo b -r && cp ./target/release/tinydancer ~/.local/bin/
+```
