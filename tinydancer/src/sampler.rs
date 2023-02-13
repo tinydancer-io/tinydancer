@@ -8,12 +8,16 @@ use rand::distributions::Uniform;
 use rand::prelude::*;
 use rayon::prelude::*;
 use reqwest::Request;
+use rocksdb::{ColumnFamily, Options as RocksOptions, DB};
+use serde::de::DeserializeOwned;
+use solana_ledger::shred::{ShredId, ShredType};
 use solana_ledger::{
     ancestor_iterator::{AncestorIterator, AncestorIteratorWithHash},
     blockstore::Blockstore,
     // blockstore_db::columns::ShredCode,
     shred::{Nonce, Shred, ShredCode, ShredData, ShredFetchStats, SIZE_OF_NONCE},
 };
+use solana_sdk::hash::hashv;
 use solana_sdk::{
     clock::Slot,
     genesis_config::ClusterType,
@@ -32,14 +36,14 @@ use std::{
     net::{SocketAddr, UdpSocket},
     thread::Builder,
 };
-use tiny_logger::logs::{debug, info};
-// use tiny_logger::{debug, error, info, log_enabled, Level};
+use tiny_logger::logs::{debug, error, info};
 use tokio::{
     sync::mpsc::UnboundedSender,
     task::{JoinError, JoinHandle},
 };
 use tungstenite::{connect, Message};
 use url::Url;
+const SHRED_CF: &'static str = &"archived_shreds";
 pub struct SampleService {
     sample_indices: Vec<u64>,
     // peers: Vec<(Pubkey, SocketAddr)>,
@@ -47,8 +51,15 @@ pub struct SampleService {
 }
 pub struct SampleServiceConfig {
     pub cluster: Cluster,
+    pub archive_config: Option<ArchiveConfig>,
 }
 
+#[derive(Clone)]
+pub struct ArchiveConfig {
+    pub shred_archive_duration: u64,
+
+    pub archive_path: String,
+}
 #[async_trait]
 impl ClientService<SampleServiceConfig> for SampleService {
     type ServiceError = tokio::task::JoinError;
@@ -60,14 +71,20 @@ impl ClientService<SampleServiceConfig> for SampleService {
 
             let (slot_update_tx, slot_update_rx) = crossbeam::channel::unbounded::<u64>();
             let (shred_tx, shred_rx) = crossbeam::channel::unbounded();
+            let (verified_shred_tx, verified_shred_rx) = crossbeam::channel::unbounded();
             threads.push(tokio::spawn(slot_update_loop(slot_update_tx, pub_sub)));
             threads.push(tokio::spawn(shred_update_loop(
                 slot_update_rx,
                 rpc_url,
                 shred_tx,
             )));
-            threads.push(tokio::spawn(shred_verify_loop(shred_rx)));
-
+            threads.push(tokio::spawn(shred_verify_loop(shred_rx, verified_shred_tx)));
+            if let Some(archive_config) = config.archive_config {
+                threads.push(tokio::spawn(shred_archiver(
+                    verified_shred_rx,
+                    archive_config.clone(),
+                )));
+            }
             for thread in threads {
                 thread.await;
             }
@@ -276,6 +293,7 @@ pub fn verify_sample(shred: &Shred, leader: solana_ledger::shred::Pubkey) -> boo
 }
 pub async fn shred_verify_loop(
     shred_rx: Receiver<(Vec<Option<Shred>>, solana_ledger::shred::Pubkey)>,
+    verified_shred_tx: Sender<(Shred, solana_ledger::shred::Pubkey)>,
 ) {
     loop {
         let rx = shred_rx.recv();
@@ -285,11 +303,17 @@ pub async fn shred_verify_loop(
                 Some(shred) => {
                     let verified = verify_sample(shred, leader);
                     match verified {
-                        true => info!(
-                            "sample {:?} verified for slot: {:?}",
-                            shred.index(),
-                            shred.slot()
-                        ),
+                        true => {
+                            info!(
+                                "sample {:?} verified for slot: {:?}",
+                                shred.index(),
+                                shred.slot()
+                            );
+                            match verified_shred_tx.send((shred.clone(), leader)) {
+                                Ok(_) => {}
+                                Err(e) => error!("Error verified_shred_tx: {}", e),
+                            }
+                        }
                         false => info!("sample INVALID for slot : {:?}", shred.slot()),
                     }
                 }
@@ -300,6 +324,75 @@ pub async fn shred_verify_loop(
         } else {
             println!("None")
         }
+    }
+}
+pub async fn shred_archiver(
+    verified_shred_rx: Receiver<(Shred, solana_ledger::shred::Pubkey)>,
+    archive_config: ArchiveConfig,
+) {
+    loop {
+        if let Ok((verified_shred, leader)) = verified_shred_rx.recv() {
+            let mut opts = RocksOptions::default();
+            opts.create_if_missing(true);
+            opts.set_error_if_exists(false);
+            opts.create_missing_column_families(true);
+
+            let key = verified_shred.id().seed(&leader);
+            // let cfs =
+            //     rocksdb::DB::list_cf(&opts, archive_config.archive_path.clone()).unwrap_or(vec![]);
+            // let shred_cf = cfs.clone().into_iter().find(|cf| cf.as_str() == SHRED_CF);
+            let instance =
+                DB::open_cf(&opts, archive_config.archive_path.clone(), vec![SHRED_CF]).unwrap();
+            // match shred_cf {
+            //     Some(cf_name) => {
+            let cf = instance.cf_handle(SHRED_CF).unwrap();
+            let put_response = put_serialized(&instance, cf, key, &verified_shred);
+            match put_response {
+                Ok(_) => info!("Saved Shred {:?} to db", verified_shred.id().seed(&leader)),
+                Err(e) => error!("{:?}", e),
+            }
+            //     }
+            //     None => instance
+            //         .create_cf(SHRED_CF, &RocksOptions::default())
+            //         .unwrap(),
+            // }
+        }
+    }
+}
+
+fn put_serialized<T: serde::Serialize + std::fmt::Debug>(
+    instance: &rocksdb::DB,
+    cf: &ColumnFamily,
+    key: [u8; 32],
+    value: &T,
+) -> Result<(), String> {
+    match serde_json::to_string(&value) {
+        Ok(serialized) => instance
+            .put_cf(cf, &key, serialized.into_bytes())
+            .map_err(|err| format!("Failed to put to ColumnFamily:{:?}", err)),
+        Err(err) => Err(format!(
+            "Failed to serialize to String. T: {:?}, err: {:?}",
+            value, err
+        )),
+    }
+}
+fn get_serialized<T: DeserializeOwned>(
+    instance: &rocksdb::DB,
+    cf: &ColumnFamily,
+    key: [u8; 32],
+) -> Result<Option<T>, String> {
+    match instance.get_cf(cf, key) {
+        Ok(opt) => match opt {
+            Some(found) => match String::from_utf8(found) {
+                Ok(s) => match serde_json::from_str::<T>(&s) {
+                    Ok(t) => Ok(Some(t)),
+                    Err(err) => Err(format!("Failed to deserialize: {:?}", err)),
+                },
+                Err(err) => Err(format!("Failed to convert to String: {:?}", err)),
+            },
+            None => Ok(None),
+        },
+        Err(err) => Err(format!("Failed to get from ColumnFamily: {:?}", err)),
     }
 }
 use serde_derive::Deserialize;
@@ -348,4 +441,30 @@ pub struct RpcShred {
     pub shred_data: Option<ShredData>,
     #[serde(rename = "ShredCode")]
     pub shred_code: Option<ShredCode>,
+}
+
+#[cfg(test)]
+mod tests {
+    use rocksdb::{Options as RocksOptions, DB};
+    use solana_ledger::shred::Shred;
+
+    use super::{get_serialized, SHRED_CF};
+    #[test]
+    fn get_shred_from_db() {
+        let mut opts = RocksOptions::default();
+        opts.create_if_missing(true);
+        opts.set_error_if_exists(false);
+        opts.create_missing_column_families(true);
+        let instance = DB::open_cf(&opts, "tmp/shreds/", vec![SHRED_CF]).unwrap();
+        let key = [
+            179, 203, 143, 155, 146, 22, 141, 66, 47, 238, 138, 131, 65, 241, 171, 101, 183, 115,
+            178, 42, 248, 125, 178, 220, 242, 2, 204, 167, 239, 159, 88, 224,
+        ];
+        let cf = instance.cf_handle(SHRED_CF).unwrap();
+        let shred = get_serialized::<Shred>(&instance, cf, key);
+        assert!(
+            shred.is_ok(),
+            "error retrieving and serializing shred from db"
+        );
+    }
 }

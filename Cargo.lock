@@ -4445,6 +4445,16 @@ dependencies = [
 [[package]]
 name = "solana-measure"
 version = "1.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bccce3b610490b860ef7796764afd9a3936591641257018835b9f790e58dbae"
+dependencies = [
+ "log",
+ "solana-sdk 1.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "solana-measure"
+version = "1.15.0"
 source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#641e036e20cf53bb35005268d0a6df9435671aeb"
 dependencies = [
  "log",
@@ -6050,10 +6060,12 @@ dependencies = [
  "rand 0.8.5",
  "rayon",
  "reqwest",
+ "rocksdb",
  "serde",
  "serde_derive",
  "serde_json",
  "solana-ledger 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-measure 1.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-metrics 1.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-sdk 1.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
