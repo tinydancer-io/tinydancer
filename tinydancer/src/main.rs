@@ -32,6 +32,7 @@ use std::io;
 
 use sampler::ArchiveConfig;
 use tinydancer::{Cluster, TinyDancer, TinyDancerConfig};
+mod gossip;
 mod macros;
 mod sampler;
 mod ui;
