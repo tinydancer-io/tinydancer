@@ -1,1 +1,1 @@
-cargo b -r && cp ./target/release/tinydancer ~/.local/bin/
+RUST_LOG=error cargo b -r -p tinydancer && cp ./target/release/tinydancer ~/.local/bin/

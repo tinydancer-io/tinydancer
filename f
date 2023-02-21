@@ -1,1 +1,1 @@
-RUST_LOG=info cargo r -r tinydancer
+RUST_LOG=error cargo r -r -p tinydancer -- --cluster Localnet --enable-gossip

@@ -6,10 +6,12 @@ use std::{env, thread::Result};
 // use tokio::time::Duration;
 use crate::{
     block_on,
+    gossip::{GossipConfig, GossipService},
     sampler::{ArchiveConfig, SampleService, SampleServiceConfig},
     ui::{UiConfig, UiService},
 };
 use async_trait::async_trait;
+use semver::Op;
 // use log::info;
 // use log4rs;
 use std::error::Error;
@@ -28,6 +30,7 @@ pub struct TinyDancer {
     ui_service: Option<UiService>,
     sample_qty: u64,
     config: TinyDancerConfig,
+    gossip_service: Option<GossipService>,
 }
 #[derive(Clone)]
 pub struct TinyDancerConfig {
@@ -35,6 +38,7 @@ pub struct TinyDancerConfig {
     pub sample_qty: u64,
     pub enable_ui_service: bool,
     pub archive_config: Option<ArchiveConfig>,
+    pub enable_gossip: bool,
 }
 
 use solana_metrics::datapoint_info;
@@ -75,6 +79,7 @@ impl TinyDancer {
             rpc_endpoint,
             sample_qty,
             archive_config,
+            enable_gossip,
         } = config.clone();
         let sample_service_config = SampleServiceConfig {
             cluster: rpc_endpoint,
@@ -86,11 +91,20 @@ impl TinyDancer {
         } else {
             None
         };
+        let gossip_service = if enable_gossip {
+            Some(GossipService::new(GossipConfig {
+                gossip_socket: String::from("0.0.0.0:5555"),
+            }))
+        } else {
+            None
+        };
+
         Self {
             config,
             ui_service,
             sample_qty,
             sample_service,
+            gossip_service,
         }
     }
     pub async fn join(self) {

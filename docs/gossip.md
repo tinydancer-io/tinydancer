@@ -6,13 +6,14 @@ The CRDS inspired by Solana's CRDS is a data structure that holds information ab
 ```txt
 CRDS
 ├── Version // Version of the nodes copy
-├── Pubkey1 -> CRDSValue
-├── Pubkey2 -> CRDSValue
-├── Pubkey3 -> CRDSValue
+├── CrdsValueLabel(Pubkey1) -> CRDSValue
+├── CrdsValueLabel(Pubkey2) -> CRDSValue
+├── CrdsValueLabel(Pubkey3) -> CRDSValue
 
 CRDSValue
 ├── Header -> CRDSValueHeader
 ├── Data -> CRDSData
+
 
 CRDSValueHeader
 ├── Pubkey

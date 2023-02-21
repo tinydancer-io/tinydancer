@@ -27,6 +27,7 @@
 #![feature(async_closure)]
 #![allow(unused_imports)]
 #![allow(dead_code)]
+#![feature(addr_parse_ascii)]
 mod tinydancer;
 use std::io;
 
@@ -49,6 +50,9 @@ struct Args {
     #[clap(long, short, default_value_t = false)]
     enable_ui_service: bool,
 
+    /// If you want to enable p2p layer
+    #[clap(long, short, default_value_t = false)]
+    enable_gossip: bool,
     /// Amount of shreds you want to sample per slot
     #[clap(long, short, default_value_t = 10)]
     sample_qty: u64,
@@ -64,12 +68,11 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-
     let config = TinyDancerConfig {
         enable_ui_service: args.enable_ui_service,
         rpc_endpoint: get_cluster(args.cluster),
         sample_qty: args.sample_qty,
-
+        enable_gossip: args.enable_gossip,
         archive_config: {
             if let Some(path) = args.archive_path {
                 Some(ArchiveConfig {

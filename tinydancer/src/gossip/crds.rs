@@ -84,7 +84,7 @@ impl Sanitize for CrdsData {
     }
 }
 
-#[derive(PartialEq, Hash, Eq, Clone, Debug)]
+#[derive(PartialEq, Hash, Eq, Clone, Debug, Serialize, Deserialize)]
 pub enum CrdsValueLabel {
     ContactInfo(Pubkey),
     Version(Pubkey),

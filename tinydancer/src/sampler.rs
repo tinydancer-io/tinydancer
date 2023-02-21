@@ -54,7 +54,7 @@ pub struct SampleServiceConfig {
     pub archive_config: Option<ArchiveConfig>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ArchiveConfig {
     pub shred_archive_duration: u64,
 
@@ -64,7 +64,7 @@ pub struct ArchiveConfig {
 impl ClientService<SampleServiceConfig> for SampleService {
     type ServiceError = tokio::task::JoinError;
     fn new(config: SampleServiceConfig) -> Self {
-        let sampler_handle = tokio::spawn(async {
+        let sampler_handle = tokio::spawn(async move {
             let rpc_url = endpoint(config.cluster);
             let pub_sub = convert_to_websocket!(rpc_url);
             let mut threads = Vec::default();
@@ -79,7 +79,8 @@ impl ClientService<SampleServiceConfig> for SampleService {
                 shred_tx,
             )));
             threads.push(tokio::spawn(shred_verify_loop(shred_rx, verified_shred_tx)));
-            if let Some(archive_config) = config.archive_config {
+
+            if let Some(archive_config) = config.archive_config.clone() {
                 threads.push(tokio::spawn(shred_archiver(
                     verified_shred_rx,
                     archive_config.clone(),
@@ -138,10 +139,10 @@ async fn slot_update_loop(slot_update_tx: Sender<u64>, pub_sub: String) {
                 if let Ok(res) = res {
                     match slot_update_tx.send(res.params.result.root as u64) {
                         Ok(_) => {
-                            println!("slot updated: {:?}", res.params.result.root);
+                            info!("slot updated: {:?}", res.params.result.root);
                         }
                         Err(e) => {
-                            println!("error here: {:?} {:?}", e, res.params.result.root as u64);
+                            info!("error here: {:?} {:?}", e, res.params.result.root as u64);
                             continue; // @TODO: we should add retries here incase send fails for some reason
                         }
                     }
@@ -189,7 +190,7 @@ async fn shred_update_loop(
                         println!("shred: {:?}", first_shred);
                         None
                     };
-                    println!("max_shreds_per_slot {:?}", max_shreds_per_slot);
+                    info!("max_shreds_per_slot {:?}", max_shreds_per_slot);
 
                     if let Some(max_shreds_per_slot) = max_shreds_per_slot {
                         let indices = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
@@ -204,7 +205,7 @@ async fn shred_update_loop(
                     None
                 }
             };
-            println!("indices of: {:?}", shred_indices_for_slot);
+            info!("indices of: {:?}", shred_indices_for_slot);
             if let Some(shred_indices_for_slot) = shred_indices_for_slot.clone() {
                 let shreds_for_slot = request_shreds(
                     slot as usize,
@@ -214,7 +215,7 @@ async fn shred_update_loop(
                 .await;
                 // println!("made 2nd req: {:?}", shreds_for_slot);
                 if let Ok(shreds_for_slot) = shreds_for_slot {
-                    println!("get shred for slot in 2nd req");
+                    info!("get shred for slot in 2nd req");
                     let mut shreds: Vec<Option<Shred>> = shreds_for_slot
                         .result
                         .shreds
@@ -318,7 +319,7 @@ pub async fn shred_verify_loop(
                     }
                 }
                 None => {
-                    println!("none")
+                    info!("none")
                 }
             });
         } else {
