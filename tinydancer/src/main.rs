@@ -34,6 +34,7 @@ use tinydancer::{Cluster, TinyDancer, TinyDancerConfig};
 mod macros;
 mod sampler;
 mod ui;
+mod stats;
 
 #[tokio::main]
 async fn main() {

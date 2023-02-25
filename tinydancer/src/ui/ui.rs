@@ -1,5 +1,5 @@
 use crate::sampler::GetShredResponse;
-use crate::tinydancer::{ClientService, TinyDancer};
+use crate::tinydancer::{ClientService, TinyDancer, Cluster};
 use async_trait::async_trait;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -9,7 +9,7 @@ use crossterm::{
 use std::{any::Any, thread::Thread};
 use std::{fmt, thread::JoinHandle};
 use thiserror::Error;
-use tui::layout::Rect;
+use tui::layout::{Rect, Corner};
 use tui::style::{Color, Modifier, Style};
 use tui::text::{Span, Spans};
 use tui::{
@@ -23,25 +23,97 @@ use tui::{
     Frame, Terminal,
 };
 
-pub struct UiService {
-    //pub views: Vec<String>, //placeholder
-    pub ui_service_handle: JoinHandle<()>, // pub table: TableState,  // placeholder view
-}
+
 
 pub struct App {
-    title: String,
-    tabs: TabsState,
-    table: TableState,
-    slot_list: StatefulList<(String, usize)>,
-    peers_list: StatefulList<Vec<String>>,
-    full_nodes_list: StatefulList<Vec<String>>
+    pub title: String,
+    pub tabs: TabsState,
+    pub slot_list: SlotList,
+    pub verification_stats_list: VerificationStatList,
+    pub per_request_sample_stat_list: PerRequestSampleStatsList,
+    //pub peers_list: StatefulList<(String, usize)>,
+    //pub full_nodes_list: StatefulList<(String, usize)>,
+    pub should_quit: bool,
+
+}
+impl App{
+   pub fn new(title: String, 
+    slot_list: Vec<usize>,
+    r_list: Vec<(usize, usize, usize, usize)>,
+    v_list: Vec<(usize, usize, usize)>,
+    //peers_list: Vec<(String, usize)>,
+    //full_nodes_list: Vec<(String, usize)>
+   ) -> App{
+    App{
+        title,
+        tabs: TabsState::new(vec!["Sampler".to_string(), "Network Usage".to_string()]),
+        slot_list: SlotList::new("SLOTS".to_string(), slot_list),
+        per_request_sample_stat_list: PerRequestSampleStatsList::new("Request Stats".to_string(), r_list),
+        verification_stats_list: VerificationStatList::new("Verified Stats".to_string(), v_list),
+        //peers_list: StatefulList::with_items(peers_list),
+        //full_nodes_list: StatefulList::with_items(full_nodes_list),
+        should_quit: true,
+     }
+    }
+    pub fn on_up(&mut self) {
+        self.slot_list.state.previous();
+    }
+    pub fn on_down(&mut self) {
+        self.slot_list.state.next();
+    }
+    pub fn on_right(&mut self) {
+        self.tabs.next();
+    }
+    pub fn on_left(&mut self) {
+        self.tabs.previous();
+    }
+
+    pub fn on_key(&mut self, c: char) {
+        match c {
+            'q' => {
+                self.should_quit = true;
+            }
+            _ => {}
+        }
+    }
 }
 
-// pub struct SlotList {
-//     title: String,
-//     state: ListState,
-//     items: Vec<Vec<(usize, String)>>,
-// }
+pub struct SlotList {
+    title: String,
+    state: StatefulList<usize>
+}
+impl SlotList{
+    pub fn new(title: String, state: Vec<usize>) -> SlotList{
+        SlotList { 
+            title, 
+            state: StatefulList::with_items(state),
+        }
+    }
+}
+pub struct PerRequestSampleStatsList{
+    title: String,
+    state: StatefulList<(usize, usize, usize, usize)>,
+}
+impl PerRequestSampleStatsList{
+    pub fn new(title: String, state: Vec<(usize, usize, usize, usize)>) -> PerRequestSampleStatsList{
+        PerRequestSampleStatsList{
+            title,
+            state: StatefulList::with_items(state)
+        }
+    }
+}
+pub struct VerificationStatList{
+    title: String,
+    state: StatefulList<(usize, usize, usize)>,
+}
+impl VerificationStatList{
+    pub fn new(title: String, state: Vec<(usize, usize, usize)>) -> VerificationStatList{
+        VerificationStatList{
+            title,
+            state: StatefulList::with_items(state)
+        }
+    }
+}
 pub struct StatefulList<T> {
     state: ListState,
     items: Vec<T>,
@@ -93,7 +165,7 @@ impl TabsState {
         TabsState { titles, index: 0 }
     }
     pub fn next(&mut self) {
-        self.index = (self.index + 1) % self.titles.len();
+        self.index = self.index + 1
     }
 
     pub fn previous(&mut self) {
@@ -105,16 +177,39 @@ impl TabsState {
         }
     }
 }
-pub struct UiConfig {}
+
 // main draw function
-pub fn draw<B: Backend>(f: &mut Frame<B>) {
+pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(20), Constraint::Percentage(40), Constraint::Percentage(40)].as_ref())
+        .constraints([Constraint::Length(3),Constraint::Min(0)].as_ref())
         .split(f.size());
-
-
-
+    
+    let titles =  app
+    .tabs
+    .titles
+    .iter()
+    .map(|t| Spans::from(Span::styled(t, Style::default().fg(Color::Yellow)))).collect();
+    
+    let tabs = Tabs::new(titles)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(app.title.clone()),
+        )
+        .highlight_style(Style::default().bg(Color::White).fg(Color::Green))
+        .select(app.tabs.index);
+    // let block = Block::default().borders(Borders::ALL).title(Span::styled(
+    //     "Footer",
+    //     Style::default()
+    //         .fg(Color::Magenta)
+    //         .add_modifier(Modifier::BOLD),
+    // ));
+   f.render_widget(tabs, chunks[0]);
+    match app.tabs.index{
+        0 => draw_first_tab(f, app, chunks[1]),
+        1 => draw_second_tab(f, app, chunks[1]),
+        _ => {}
+    }
 
 }
 
@@ -123,20 +218,24 @@ where
     B: Backend,
 {
     let chunks = Layout::default()
+        .direction(Direction::Horizontal)
         .constraints(
             [
-                Constraint::Length(20),
-                Constraint::Length(3),
-                Constraint::Length(2),
+                Constraint::Percentage(20),
+                Constraint::Length(40),
+                Constraint::Length(40),
             ]
             .as_ref(),
         )
         .split(area);
 
     //ui(f, app, chunks[0]);
-    draw_slot_list(f, app, chunks[0]);
-    
+    draw_list_one(f, app, chunks[0]);
+    draw_list_two(f, app, chunks[1]);
+    draw_list_three(f, app, chunks[2]);
 }
+    
+// }
 fn draw_second_tab<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
 where
     B: Backend,
@@ -151,84 +250,133 @@ where
             .as_ref(),
         )
         .split(area);
-     //todo: Draw network usage metrics here
-        todo!()
+     //todo: Draw network usage metrics here...
+     draw_list_one(f, app, chunks[0]);
+     draw_list_two(f, app, chunks[0]);
+     draw_list_three(f, app, chunks[1]);
+
 }
 
 
 
 // draws list of slots
-fn draw_slot_list<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+fn draw_list_one<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
     // let selected_style = Style::default().add_modifier(Modifier::REVERSED);
     // let normal_style = Style::default().bg(Color::LightBlue);
-    let items: Vec<ListItem> = app
+    let slots: Vec<ListItem> = app
         .slot_list
+        .state
         .items
         .iter()
         .map(|i| {
-            let mut lines = vec![Spans::from(i.0.clone())];
-            for _ in 0..i.1 {
+            let mut lines = vec![Spans::from(Span::styled("Slot".to_string(), Style::default().add_modifier(Modifier::BOLD)))];
+            
                 lines.push(Spans::from(Span::styled(
                     // dummy values in list that would be replaced by slot numbers
-                    "slots 1",
+                    i.to_string(),
                     Style::default().add_modifier(Modifier::ITALIC),
                 )));
-            }
-            ListItem::new(lines).style(Style::default().fg(Color::Black).bg(Color::White))
+        
+            ListItem::new(lines).style(Style::default().fg(Color::LightGreen).bg(Color::Black))
         })
         .collect();
-    let list = List::new(items)
+    let list = List::new(slots)
             .block(Block::default().borders(Borders::ALL).title("SLOTS"))
             .highlight_style(Style::default().bg(Color::Cyan).add_modifier(Modifier::BOLD))
             .highlight_symbol(">>");
-    f.render_stateful_widget(list, area, &mut app.slot_list.state);
-    // let peers_list: Vec<ListItem> = app
-    //     .peers_list
-    //     .items
-    //     .iter()
-    //     .map(|i|{
-        
-    //     })     
-          
+    f.render_stateful_widget(list, area, &mut app.slot_list.state.state);
+    
+    
+    
 }
 
-#[async_trait]
-impl ClientService<UiConfig> for UiService {
-    type ServiceError = ThreadJoinError;
-    fn new(config: UiConfig) -> Self {
-        let ui_service_handle = std::thread::spawn(|| loop {
-            println!("rendering ui");
-            std::thread::sleep(std::time::Duration::from_secs(2));
-        });
-        Self { ui_service_handle }
-    }
-    async fn join(self) -> std::result::Result<(), Self::ServiceError> {
-        match self.ui_service_handle.join() {
-            Ok(_) => Ok(()),
-            Err(error) => Err(ThreadJoinError { error }),
-        }
-    }
+fn draw_list_two<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+    let r_list: Vec<ListItem> = app
+        .per_request_sample_stat_list
+        .state
+        .items
+        .iter()
+        .map(|i|{
+            let slot_span = Spans::from(vec![
+                Span::styled(format!("{:<8}", "Slot: "),Style::default().fg(Color::Blue)),
+                Span::raw(" "),
+                Span::styled(i.0.to_string(), Style::default().fg(Color::LightBlue))
+            ]);
+            let total_sampled_span = Spans::from(vec![
+                Span::styled(format!("{:<8}", "TotalSampled:"),Style::default().fg(Color::Blue)),
+                Span::raw(" "),
+                Span::styled(i.1.to_string(), Style::default().fg(Color::LightBlue))
+            ]); 
+            let data_shred_span = Spans::from(vec![
+                Span::styled(format!("{:<8}", "DataShreds:"),Style::default().fg(Color::Blue)),
+                Span::raw(" "),
+                Span::styled(i.2.to_string(), Style::default().fg(Color::LightBlue))
+            ]);
+            let coding_shred_span = Spans::from(vec![
+                Span::styled(format!("{:<8}", "CodingShreds:"),Style::default().fg(Color::Blue)),
+                Span::raw(" "),
+                Span::styled(i.3.to_string(), Style::default().fg(Color::LightBlue))
+            ]);
+            ListItem::new(vec![
+                Spans::from("-".repeat(area.width as usize)),
+                slot_span,
+                total_sampled_span,
+                data_shred_span,
+                coding_shred_span,
+                Spans::from("-".repeat(area.width as usize))
+            ]).style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD))
+        })
+        .collect();
+     
+    let r_list = List::new(r_list)
+                            .block(Block::default().borders(Borders::ALL).title("PER REQUEST SAMPLE STATS"))
+                            .start_corner(Corner::BottomRight)
+                            .highlight_style(Style::default().bg(Color::Cyan).add_modifier(Modifier::BOLD))
+                            .highlight_symbol(">>");
+    f.render_stateful_widget(r_list, area, &mut app.per_request_sample_stat_list.state.state);
 }
 
-#[derive(Debug, Error)]
-pub struct ThreadJoinError {
-    error: Box<dyn Any + Send>,
+fn draw_list_three<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect){
+    let ve_list: Vec<ListItem> = app
+        .verification_stats_list
+        .state
+        .items
+        .iter()
+        .map(|i|{
+
+            let slot_span = Spans::from(vec![
+                Span::styled(format!("{:<8}", "Slot: "),Style::default().fg(Color::Blue)),
+                Span::raw(" "),
+                Span::styled(i.0.to_string(), Style::default().fg(Color::LightBlue))
+            ]);
+
+            let verified_span = Spans::from(vec![
+                Span::styled(format!("{:<8}", "Successfully Verified: "),Style::default().fg(Color::Blue)),
+                Span::raw(" "),
+                Span::styled(i.1.to_string(), Style::default().fg(Color::LightBlue))
+            ]); 
+            let failed_span = Spans::from(vec![
+                Span::styled(format!("{:<8}", "Failed: "),Style::default().fg(Color::Blue)),
+                Span::raw(" "),
+                Span::styled(i.2.to_string(), Style::default().fg(Color::LightBlue))
+            ]); 
+            ListItem::new(vec![
+                Spans::from("-".repeat(area.width as usize)),
+                slot_span,
+                verified_span,
+                failed_span,
+                Spans::from("-".repeat(area.width as usize))
+            ]).style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD))
+        })
+        .collect();
+     
+    let v_list = List::new(ve_list)
+                            .block(Block::default().borders(Borders::ALL).title("VERIFICATION STATS"))
+                            .start_corner(Corner::BottomRight)
+                            .highlight_style(Style::default().bg(Color::Cyan).add_modifier(Modifier::BOLD))
+                            .highlight_symbol(">>");
+    f.render_stateful_widget(v_list, area, &mut app.verification_stats_list.state.state);
+                
 }
 
-// impl ThreadJoinError {
-//     fn new<E: Any + Send>(msg: Box<E>) -> ThreadJoinError {
-//         ThreadJoinError { error: msg }
-//     }
-// }
 
-impl fmt::Display for ThreadJoinError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.error)
-    }
-}
-
-// impl Error for ThreadJoinError {
-//     fn description(&self) -> &str {
-//         &self.error.into()
-//     }
-// }

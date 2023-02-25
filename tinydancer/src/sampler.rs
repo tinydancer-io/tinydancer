@@ -1,4 +1,6 @@
+use crate::stats::{PerRequestSampleStats, PerRequestVerificationStats, SlotUpdateStats};
 use crate::tinydancer::{endpoint, ClientService, Cluster};
+use crate::ui::crossterm::start_ui_loop;
 use crate::{convert_to_websocket, send_rpc_call, try_coerce_shred};
 use async_trait::async_trait;
 use crossbeam::channel::{Receiver, Sender};
@@ -14,6 +16,7 @@ use solana_ledger::{
     // blockstore_db::columns::ShredCode,
     shred::{Nonce, Shred, ShredCode, ShredData, ShredFetchStats, SIZE_OF_NONCE},
 };
+use solana_measure::measure::Measure;
 use solana_sdk::{
     clock::Slot,
     genesis_config::ClusterType,
@@ -27,6 +30,7 @@ use solana_sdk::{
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 use std::{error::Error, ops::Add};
 use std::{
     net::{SocketAddr, UdpSocket},
@@ -60,14 +64,21 @@ impl ClientService<SampleServiceConfig> for SampleService {
 
             let (slot_update_tx, slot_update_rx) = crossbeam::channel::unbounded::<u64>();
             let (shred_tx, shred_rx) = crossbeam::channel::unbounded();
-            threads.push(tokio::spawn(slot_update_loop(slot_update_tx, pub_sub)));
+            //from slot_update_loop to shred_verify_loop
+            let (slot_tx, slot_rx) = crossbeam::channel::unbounded::<u64>();
+            // from slot_update_loop to start_ui_loop
+            let (ui_slot_tx, ui_slot_rx) = crossbeam::channel::unbounded::<SlotUpdateStats>();
+            let (verification_stats_tx, verification_stats_rx) = crossbeam::channel::unbounded::<PerRequestVerificationStats>();
+            let (per_req_tx, per_req_rx) = crossbeam::channel::unbounded::<PerRequestSampleStats>();
+            threads.push(tokio::spawn(slot_update_loop(slot_update_tx,slot_tx, ui_slot_tx, pub_sub)));
             threads.push(tokio::spawn(shred_update_loop(
                 slot_update_rx,
                 rpc_url,
                 shred_tx,
+                per_req_tx,
             )));
-            threads.push(tokio::spawn(shred_verify_loop(shred_rx)));
-
+            threads.push(tokio::spawn(shred_verify_loop(shred_rx,slot_rx, verification_stats_tx)));
+            threads.push(tokio::spawn(start_ui_loop(ui_slot_rx, per_req_rx, verification_stats_rx)));
             for thread in threads {
                 thread.await;
             }
@@ -87,7 +98,7 @@ pub fn gen_random_indices(max_shreds_per_slot: usize, sample_qty: usize) -> Vec<
     let vec = (0..max_shreds_per_slot)
         .map(|_| rng.gen_range(0..max_shreds_per_slot))
         .collect::<Vec<usize>>();
-    vec.as_slice()[0..(sample_qty as usize)].to_vec()
+    vec.as_slice()[0..sample_qty].to_vec()
 }
 pub async fn request_shreds(
     slot: usize,
@@ -104,7 +115,7 @@ pub async fn request_shreds(
     serde_json::from_str::<GetShredResponse>(res.to_string().as_str())
 }
 
-async fn slot_update_loop(slot_update_tx: Sender<u64>, pub_sub: String) {
+async fn slot_update_loop(slot_update_tx: Sender<u64>, slot_tx: Sender<u64>,ui_slot_tx: Sender<SlotUpdateStats>, pub_sub: String) {
     let (mut socket, _response) =
         connect(Url::parse(pub_sub.as_str()).unwrap()).expect("Can't connect to websocket");
     socket
@@ -112,7 +123,7 @@ async fn slot_update_loop(slot_update_tx: Sender<u64>, pub_sub: String) {
             r#"{ "jsonrpc": "2.0", "id": 1, "method": "slotSubscribe" }"#.into(),
         ))
         .unwrap();
-
+    let mut slot_update_stats = SlotUpdateStats::default(); 
     loop {
         match socket.read_message() {
             Ok(msg) => {
@@ -121,7 +132,17 @@ async fn slot_update_loop(slot_update_tx: Sender<u64>, pub_sub: String) {
                 if let Ok(res) = res {
                     match slot_update_tx.send(res.params.result.root as u64) {
                         Ok(_) => {
-                            println!("slot updated: {:?}", res.params.result.root);
+                           // println!("slot updated: {:?}", res.params.result.root);
+                            // report slot or root from the response?
+                            slot_update_stats.slots = res.params.result.root as usize;
+                          //  println!("HASSUUUUUUU! {:?}", slot_update_stats);
+                            slot_tx.send(res.params.result.root as u64).expect("failed to send update to verifier thread");
+                            ui_slot_tx.send(
+                                // SlotUpdateStats::new(
+                                //     res.params.result.root as usize,
+                                slot_update_stats
+                                
+                            ).expect("failed");
                         }
                         Err(e) => {
                             println!("error here: {:?} {:?}", e, res.params.result.root as u64);
@@ -134,15 +155,19 @@ async fn slot_update_loop(slot_update_tx: Sender<u64>, pub_sub: String) {
         }
     }
 }
-
+//need to send the PerRequestSampleStats to the UI service
 async fn shred_update_loop(
     slot_update_rx: Receiver<u64>,
     endpoint: String,
     shred_tx: Sender<(Vec<Option<Shred>>, solana_ledger::shred::Pubkey)>,
+    per_req_stat_tx: Sender<PerRequestSampleStats>,
 ) {
+    let mut per_request_sample_stats = PerRequestSampleStats::default();
     loop {
         if let Ok(slot) = slot_update_rx.recv() {
+            //let mut last_stats = Instant::now();
             let shred_for_one = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
+            per_request_sample_stats.slot = slot;
             // println!("res {:?}", shred_for_one);
             let shred_indices_for_slot = match shred_for_one {
                 Ok(first_shred) => {
@@ -154,6 +179,8 @@ async fn shred_update_loop(
                             first_shred.clone().shred_code,
                         ) {
                             (Some(data_shred), None) => {
+                                per_request_sample_stats.num_data_shreds = Shred::ShredData(data_shred.clone())
+                                .num_data_shreds().unwrap() as usize;
                                 Some(
                                     Shred::ShredData(data_shred)
                                         .num_data_shreds()
@@ -161,18 +188,23 @@ async fn shred_update_loop(
                                 )
                                 // Some(data_shred. ().expect("num data shreds error"))
                             }
-                            (None, Some(coding_shred)) => Some(
+                            (None, Some(coding_shred)) =>{ 
+                                per_request_sample_stats.num_coding_shreds = Shred::ShredCode(coding_shred.clone())
+                                .num_coding_shreds().unwrap() as usize;
+                                Some(
                                 Shred::ShredCode(coding_shred)
                                     .num_coding_shreds()
                                     .expect("num code shreds error"),
-                            ),
+                            )
+                        }
                             _ => None,
+                        
                         }
                     } else {
-                        println!("shred: {:?}", first_shred);
+                       // println!("shred: {:?}", first_shred);
                         None
                     };
-                    println!("max_shreds_per_slot {:?}", max_shreds_per_slot);
+                   // println!("max_shreds_per_slot {:?}", max_shreds_per_slot);
 
                     if let Some(max_shreds_per_slot) = max_shreds_per_slot {
                         let indices = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
@@ -187,7 +219,7 @@ async fn shred_update_loop(
                     None
                 }
             };
-            println!("indices of: {:?}", shred_indices_for_slot);
+           // println!("indices of: {:?}", shred_indices_for_slot);
             if let Some(shred_indices_for_slot) = shred_indices_for_slot.clone() {
                 let shreds_for_slot = request_shreds(
                     slot as usize,
@@ -197,13 +229,14 @@ async fn shred_update_loop(
                 .await;
                 // println!("made 2nd req: {:?}", shreds_for_slot);
                 if let Ok(shreds_for_slot) = shreds_for_slot {
-                    println!("get shred for slot in 2nd req");
+                   // println!("get shred for slot in 2nd req");
                     let mut shreds: Vec<Option<Shred>> = shreds_for_slot
                         .result
                         .shreds
                         .par_iter()
                         .map(|s| try_coerce_shred!(s))
                         .collect();
+                    per_request_sample_stats.total_sampled = shreds.len() as usize;
                     // println!("before leader");
                     let leader = solana_ledger::shred::Pubkey::from_str(
                         shreds_for_slot.result.leader.as_str(),
@@ -242,9 +275,12 @@ async fn shred_update_loop(
                     {
                         info!("Received incomplete number of shreds, requested {:?} shreds for slot {:?} and received {:?}", shred_indices_for_slot.len(),slot, fullfill_count);
                     }
+                    //println!("MORTY! {:?}", per_request_sample_stats);
                     shred_tx
                         .send((shreds, leader))
                         .expect("shred tx send error");
+                    per_req_stat_tx.send(per_request_sample_stats).expect("failed to send");
+                    
                 }
             }
         }
@@ -276,34 +312,66 @@ pub fn verify_sample(shred: &Shred, leader: solana_ledger::shred::Pubkey) -> boo
 }
 pub async fn shred_verify_loop(
     shred_rx: Receiver<(Vec<Option<Shred>>, solana_ledger::shred::Pubkey)>,
+    //verified_stats: &mut SampleVerificationStats
+    slot_rx: Receiver<u64>,
+    verification_stats_tx: Sender<PerRequestVerificationStats>,
 ) {
+    let mut sample_verification_stats = &mut PerRequestVerificationStats::default();
+    
     loop {
         let rx = shred_rx.recv();
-
+        let current_slot = slot_rx.recv().expect("failed to receive slot update in verifier loop");
+        // let first = rx.unwrap().0[0].unwrap().slot();
         if let Ok((shreds, leader)) = rx {
-            shreds.par_iter().for_each(|sh| match sh {
-                Some(shred) => {
-                    let verified = verify_sample(shred, leader);
-                    match verified {
-                        true => info!(
-                            "sample {:?} verified for slot: {:?}",
-                            shred.index(),
-                            shred.slot()
-                        ),
-                        false => info!("sample INVALID for slot : {:?}", shred.slot()),
+           let ver_result = shreds.par_iter().map(|sh| {
+                let mut stat = 0usize;
+                let mut failed_stat = 0usize;
+                match sh {
+                    Some(shred) => {
+                        let verified = verify_sample(shred, leader);
+                        match verified {
+                            true => {
+                                stat+=1;
+                                info!(
+                                "sample {:?} verified for slot: {:?}",
+                                shred.index(),
+                                shred.slot(),
+                            );   
+                        }
+                            false => {
+                                failed_stat+=1;
+                                info!("sample INVALID for slot : {:?}", shred.slot())
+                            },
+                        }
+    
+                    }
+                    None => {
+                        
+            
                     }
                 }
-                None => {
-                    println!("none")
-                }
-            });
+                 (stat,failed_stat)
+               // sample_verification_stats.num_verified += stat;
+               // sample_verification_stats.num_failed += failed_stat;
+            },
+        ).collect::<Vec<(usize, usize)>>();
+        let res = ver_result.iter().fold((0, 0), |acc, &(x,y)| (acc.0 + x, acc.1 + y));
+        let (verified, failed) = res;
+        sample_verification_stats.slot = current_slot as u64;
+        sample_verification_stats.num_verified = verified;
+        sample_verification_stats.num_failed = failed;
+       // println!("RICKKKK! -> {:?}", sample_verification_stats);
+        verification_stats_tx.send(*sample_verification_stats).expect("failed to send");
         } else {
             println!("None")
         }
     }
+
 }
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
+
+//#[derive()]
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

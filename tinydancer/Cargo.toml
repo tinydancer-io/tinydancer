@@ -2,7 +2,7 @@
 name = "tinydancer"
 version = "0.1.0"
 edition = "2021"
-
+default-run = "tinydancer"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -30,3 +30,4 @@ diesel = { version = "2.0.3", features = ["sqlite"] }
 # log4rs = "1.2.0"
 tiny-logger={path="../logger"}
 solana-metrics="1.15.0"
+solana-measure = "1.15.0"
