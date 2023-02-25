@@ -3,6 +3,7 @@ use super::ping_pong;
 use super::protocol::Protocol;
 use crate::tinydancer::ClientService;
 use async_trait::async_trait;
+use clap::error;
 use core::str;
 use crossbeam::channel::unbounded;
 use solana_sdk::sanitize::Sanitize;
@@ -45,8 +46,11 @@ impl ClientService<GossipConfig> for GossipService {
                 loop {
                     let mut buf = [0u8; 32];
                     while let Ok((n, addr)) = rx_socket.recv_from(&mut buf).await {
-                        println!("{:?} bytes response from {:?}", n, addr);
-                        let packet = packet::Packet::from_data(Some(&addr), buf);
+                        println!("{:?} bytes response from {:?}", n, buf);
+
+                        let packet: Result<packet::Packet, Box<bincode::ErrorKind>> =
+                            bincode::deserialize(&buf);
+                        println!("is packet deserializing {:?}", packet);
                         match packet {
                             Ok(packet) => receiver_tx.send(packet).expect("send err"),
                             Err(e) => println!("error creating packet from network{:?}", e),
@@ -55,15 +59,19 @@ impl ClientService<GossipConfig> for GossipService {
                 }
             });
             let deser_and_verify_packet = |packet: packet::Packet| {
-                let protocol: Protocol = packet.deserialize_slice(..).ok()?;
-                protocol.sanitize().ok()?;
-                let protocol = protocol.par_verify()?; // @TODO: add stats here
+                println!("hello {:?}", packet.meta());
+                let protocol: Protocol = bincode::deserialize(packet.data(..).unwrap()).unwrap();
+                println!("protocol {:?}", protocol);
+                // let protocol = protocol.ok().unwrap();
+                // protocol.sanitize().ok()?;
+                // let protocol = protocol.par_verify()?; // @TODO: add stats here
                 Some((packet.meta().socket_addr(), protocol))
             };
             let listener = tokio::spawn(async move {
                 loop {
                     while let Ok(packet) = receiver_rx.recv() {
                         let verified_packet = deser_and_verify_packet(packet);
+                        error!("verified_packet {:?}", verified_packet);
                         match verified_packet {
                             Some(packet) => listener_tx.send(packet).expect("send err"),
                             None => error!(
@@ -100,12 +108,14 @@ impl ClientService<GossipConfig> for GossipService {
 #[cfg(test)]
 mod tests {
 
-    use std::net::SocketAddr;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     use rand::{rngs::ThreadRng, Rng};
     use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
     use solana_sdk::signature::Keypair;
     use tokio::net::UdpSocket;
+
+    use crate::gossip::packet;
 
     use super::{ping_pong, Protocol};
     #[tokio::test]
@@ -120,9 +130,19 @@ mod tests {
         let token = [69u8; 32];
         let ping = Protocol::PingMessage(ping_pong::Ping::new(token, &kp).unwrap());
         socket.set_broadcast(true).expect("shut up");
-        let res = socket
-            .send_to(ping.serialize().as_slice(), "0.0.0.0:5555")
-            .await;
-        println!("res {:?}", res);
+        let mut packet = packet::Packet::from_data(
+            Some(&SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                5555,
+            )),
+            ping,
+        )
+        .unwrap();
+        let serialized_packet = bincode::serialize(&packet).unwrap();
+        let res = socket.send_to(&serialized_packet, "0.0.0.0:5555").await;
+        let deserialized_locally: Result<packet::Packet, Box<bincode::ErrorKind>> =
+            bincode::deserialize(&serialized_packet); // works here
+        println!("sent {:?}", res);
+        println!("deserialized locally {:?}", deserialized_locally)
     }
 }

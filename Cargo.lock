@@ -1853,6 +1853,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fed44880c466736ef9a5c5b5facefb5ed0785676d0c02d612db14e54f0d84286"
 
 [[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
 name = "histogram"
 version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2091,6 +2097,7 @@ dependencies = [
  "autocfg",
  "hashbrown 0.12.3",
  "rayon",
+ "serde",
 ]
 
 [[package]]
@@ -3747,8 +3754,14 @@ version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30d904179146de381af4c93d3af6ca4984b3152db687dacb9c3c35e86f39809c"
 dependencies = [
+ "base64 0.13.1",
+ "chrono",
+ "hex",
+ "indexmap",
  "serde",
+ "serde_json",
  "serde_with_macros",
+ "time 0.3.17",
 ]
 
 [[package]]
@@ -6173,6 +6186,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "serde_with",
  "solana-ledger 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "solana-measure 1.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-metrics 1.15.0 (registry+https://github.com/rust-lang/crates.io-index)",

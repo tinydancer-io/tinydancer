@@ -48,7 +48,7 @@ struct Args {
 
     /// If you want to enable the monitoring ui
     #[clap(long, short, default_value_t = false)]
-    enable_ui_service: bool,
+    ui_service: bool,
 
     /// If you want to enable p2p layer
     #[clap(long, short, default_value_t = false)]
@@ -69,7 +69,7 @@ struct Args {
 async fn main() {
     let args = Args::parse();
     let config = TinyDancerConfig {
-        enable_ui_service: args.enable_ui_service,
+        enable_ui_service: args.ui_service,
         rpc_endpoint: get_cluster(args.cluster),
         sample_qty: args.sample_qty,
         enable_gossip: args.enable_gossip,

@@ -1,5 +1,8 @@
 //! The definition of a Solana network packet.
 
+use serde::Deserialize;
+use serde_with::{serde_as, Bytes};
+
 use {
     bincode::{Options, Result},
     bitflags::bitflags,
@@ -20,6 +23,7 @@ use {
 pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 
 bitflags! {
+    #[derive(Serialize, Deserialize)]
     #[repr(C)]
     pub struct PacketFlags: u8 {
         const DISCARD        = 0b0000_0001;
@@ -30,7 +34,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct Meta {
     pub size: usize,
@@ -39,12 +43,13 @@ pub struct Meta {
     pub flags: PacketFlags,
     pub sender_stake: u64,
 }
-
-#[derive(Clone, Eq)]
+#[serde_as]
+#[derive(Clone, Eq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct Packet {
     // Bytes past Packet.meta.size are not valid to read from.
     // Use Packet.data(index) to read from the buffer.
+    #[serde_as(as = "Bytes")]
     buffer: [u8; PACKET_DATA_SIZE],
     meta: Meta,
 }
@@ -120,11 +125,13 @@ impl Packet {
         I: SliceIndex<[u8], Output = [u8]>,
     {
         let bytes = self.data(index).ok_or(bincode::ErrorKind::SizeLimit)?;
-        bincode::options()
-            .with_limit(PACKET_DATA_SIZE as u64)
-            .with_fixint_encoding()
-            .reject_trailing_bytes()
-            .deserialize(bytes)
+        println!("packet {:?}", bytes);
+        // bincode::options()
+        //     .with_limit(PACKET_DATA_SIZE as u64)
+        //     .with_fixint_encoding()
+        //     .reject_trailing_bytes()
+        //     .deserialize(bytes)
+        bincode::deserialize(bytes)
     }
 }
 
