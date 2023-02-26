@@ -44,27 +44,28 @@ impl ClientService<GossipConfig> for GossipService {
 
                 println!("Broadcast: {:?}", rx_socket.broadcast());
                 loop {
-                    let mut buf = [0u8; 32];
+                    let mut buf = [0u8; 1267];
                     while let Ok((n, addr)) = rx_socket.recv_from(&mut buf).await {
-                        println!("{:?} bytes response from {:?}", n, buf);
+                        info!("{:?} bytes response from {:?}", n, buf);
 
                         let packet: Result<packet::Packet, Box<bincode::ErrorKind>> =
                             bincode::deserialize(&buf);
-                        println!("is packet deserializing {:?}", packet);
+                        info!("is packet deserializing {:?}", packet);
                         match packet {
-                            Ok(packet) => receiver_tx.send(packet).expect("send err"),
-                            Err(e) => println!("error creating packet from network{:?}", e),
+                            Ok(packet) => {
+                                receiver_tx.send(packet).expect("send err");
+                            }
+                            Err(e) => error!("error creating packet from network{:?}", e),
                         }
                     }
                 }
             });
             let deser_and_verify_packet = |packet: packet::Packet| {
-                println!("hello {:?}", packet.meta());
-                let protocol: Protocol = bincode::deserialize(packet.data(..).unwrap()).unwrap();
+                let protocol: Protocol = bincode::deserialize(packet.data(..)?).ok()?;
                 println!("protocol {:?}", protocol);
                 // let protocol = protocol.ok().unwrap();
-                // protocol.sanitize().ok()?;
-                // let protocol = protocol.par_verify()?; // @TODO: add stats here
+                protocol.sanitize().ok()?;
+                let protocol = protocol.par_verify()?; // @TODO: add stats here
                 Some((packet.meta().socket_addr(), protocol))
             };
             let listener = tokio::spawn(async move {
@@ -86,8 +87,11 @@ impl ClientService<GossipConfig> for GossipService {
                 sender_socket.set_broadcast(true).expect("err");
                 loop {
                     while let Ok((a, p)) = listener_rx.recv() {
+                        println!("reached");
                         match sender_socket.send_to(p.serialize().as_slice(), a).await {
-                            Ok(r) => {}
+                            Ok(r) => {
+                                println!("sent {:?} {:?}", r, a);
+                            }
                             Err(e) => error!("socket send err{:?}", e),
                         }
                     }
@@ -140,9 +144,25 @@ mod tests {
         .unwrap();
         let serialized_packet = bincode::serialize(&packet).unwrap();
         let res = socket.send_to(&serialized_packet, "0.0.0.0:5555").await;
-        let deserialized_locally: Result<packet::Packet, Box<bincode::ErrorKind>> =
-            bincode::deserialize(&serialized_packet); // works here
+        // let deserialized_locally: Result<packet::Packet, Box<bincode::ErrorKind>> =
+        //     bincode::deserialize(&serialized_packet); // works here
         println!("sent {:?}", res);
-        println!("deserialized locally {:?}", deserialized_locally)
+        // let mut buf = [0u8; 1267];
+        // loop {
+        //     if let Ok((_, a)) = socket.recv_from(&mut buf).await {
+        //         panic!("RXed {:?} {:?}", a, buf)
+        //     }
+        // }
+        // println!("deserialized locally {:?}", deserialized_locally)
     }
+    // #[tokio::test]
+    // async fn send_packet() {
+    //     let addr = String::from("0.0.0.0:6666");
+    //     let socket = UdpSocket::bind(addr.as_str().parse::<SocketAddr>().unwrap())
+    //         .await
+    //         .unwrap();
+    //     let mut buf = [0u8; 1267];
+    //     let x = socket.send_to(&mut buf, "0.0.0.0:5555").await;
+    //     println!("sent 5555 {:?}", x);
+    // }
 }

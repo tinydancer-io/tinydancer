@@ -298,9 +298,8 @@ pub async fn shred_verify_loop(
 ) {
     loop {
         let rx = shred_rx.recv();
-
-        if let Ok((shreds, leader)) = rx {
-            shreds.par_iter().for_each(|sh| match sh {
+        match rx {
+            Ok((shreds, leader)) => shreds.par_iter().for_each(|sh| match sh {
                 Some(shred) => {
                     let verified = verify_sample(shred, leader);
                     match verified {
@@ -321,9 +320,11 @@ pub async fn shred_verify_loop(
                 None => {
                     info!("none")
                 }
-            });
-        } else {
-            println!("None")
+            }),
+
+            Err(e) => {
+                // println!("None {:?}", e)
+            }
         }
     }
 }
