@@ -59,6 +59,7 @@ pub struct PerRequestSampleStats {
    pub total_sampled: usize,
    pub num_data_shreds: usize,
    pub num_coding_shreds: usize,
+   //pub num_requested_shreds: usize,
 }
 impl PerRequestSampleStats{
  fn update(

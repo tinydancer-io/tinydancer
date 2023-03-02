@@ -31,3 +31,4 @@ diesel = { version = "2.0.3", features = ["sqlite"] }
 tiny-logger={path="../logger"}
 solana-metrics="1.15.0"
 solana-measure = "1.15.0"
+jsonrpsee = "0.16.2"

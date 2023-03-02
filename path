@@ -1,0 +1,1 @@
+cargo b -r && cp ./target/release/tinydancer ~/.local/bin/
