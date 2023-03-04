@@ -165,42 +165,53 @@ async fn shred_update_loop(
     loop {
         if let Ok(slot) = slot_update_rx.recv() {
             //let mut last_stats = Instant::now();
+            //Why don't we pass random indices here directly?
             let shred_for_one = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
             per_request_sample_stats.slot = slot;
             // println!("res {:?}", shred_for_one);
             let shred_indices_for_slot = match shred_for_one {
                 Ok(_first_shred) => {
-                    //since the rpc response gives us a flattened Vec<[data_shred, codingshred, data_shred, coding_shred...n]>
+                    //since the rpc response gives us a flattened Vec<[data_shred[1], codingshred[17], data_shred, coding_shred...n]>
                     // and below we're getting the second item (at index 1) i.e the coding shred for each iteration of
                     // the outer loop, hence we always get coding shred count and no data shreds.
                     let first_shred = &_first_shred.result.shreds[1].clone(); // add some check later
 
-                    //##############################################################################################################
-                    let vec_shreds: Vec<RpcShred> = _first_shred.result.shreds.into_iter().flatten().collect();
-                    let n: Vec<u16> = vec_shreds.into_iter().map(|s| match (s.clone().shred_data,
-                    s.clone().shred_code){
-                        (Some(data_shred), None) => {
-                            per_request_sample_stats.num_data_shreds = Shred::ShredData(data_shred.clone())
-                            .num_data_shreds().unwrap() as usize;
-                            Some(
-                                Shred::ShredData(data_shred)
-                                    .num_data_shreds()
-                                    .expect("num data shreds error"),
-                            )
-                            // Some(data_shred. ().expect("num data shreds error"))
-                        }
-                        (None, Some(coding_shred)) =>{ 
-                            per_request_sample_stats.num_coding_shreds = Shred::ShredCode(coding_shred.clone())
-                            .num_coding_shreds().unwrap() as usize;
-                            Some(
-                            Shred::ShredCode(coding_shred)
-                                .num_coding_shreds()
-                                .expect("num code shreds error"),
-                        )
-                    }
-                        _ => None,
-                    }).flatten().collect();
-                    //###############################################################################################################
+                    //#########################################<EXPERIMENTAL !>###############################################################
+                    // ---> Now we're getting individual instances of RpcShred struct collected in Vec<RpcShred> where
+                    // the first 'RpcShred' struct in the vector contains data shred (ShredData) (Option<ShredCode> is None here) and the next one 
+                    // right after it contains coding shred (ShredCode) (Option<ShredData> is None here). 
+                    // Implementing Iterator trait over RpcShred should help here.
+                  //  let vec_shreds: Vec<RpcShred> = _first_shred.result.shreds.into_iter().flatten().skip(1).step_by(2).collect();
+                    let vec_shreds: Vec<RpcShred> = _first_shred.result.shreds.into_iter().flatten().flatten().collect();
+                    println!("{:?}",vec_shreds);
+                    // let n: Vec<u16> = vec_shreds.into_iter().map(|s| match (s.clone().shred_data,
+                    // s.clone().shred_code){
+                    //     (Some(data_shred), None) => {
+                    //         per_request_sample_stats.num_data_shreds = Shred::ShredData(data_shred.clone())
+                    //         //It panics here on unwrap() when i run the experimental code.
+                    //         //WHY? Apparently num_data_shreds() only looks for ShredCode i.e. the coding shreds.
+                    //         //This is set in the validator codebase by Solana Labs.
+                    //         .num_data_shreds().unwrap() as usize;
+                    //         Some(
+                    //             Shred::ShredData(data_shred)
+                    //                 .num_data_shreds()
+                    //                 .expect("num data shreds error"),
+                    //         )
+                    //         // Some(data_shred. ().expect("num data shreds error"))
+                    //     }
+                    //     (None, Some(coding_shred)) =>{ 
+                    //         per_request_sample_stats.num_coding_shreds = Shred::ShredCode(coding_shred.clone())
+                    //         .num_coding_shreds().unwrap() as usize;
+                    //         Some(
+                    //         Shred::ShredCode(coding_shred)
+                    //             .num_coding_shreds()
+                    //             .expect("num code shreds error"),
+                    //     )
+                    // }
+                    //     _ => None,
+                    // }).flatten().collect();
+                    //###############################################<EXPERIMENTAL !>################################################################
+
                     // This max_shreds_per_slot is a count of coding shreds since it always matches with
                     // the coding shred arm
                     let max_shreds_per_slot = if let Some(first_shred) = first_shred {
@@ -219,6 +230,7 @@ async fn shred_update_loop(
                                 // Some(data_shred. ().expect("num data shreds error"))
                             }
                             (None, Some(coding_shred)) =>{ 
+                                //We get 17 coding shreds here
                                 per_request_sample_stats.num_coding_shreds = Shred::ShredCode(coding_shred.clone())
                                 .num_coding_shreds().unwrap() as usize;
                                 Some(
@@ -238,7 +250,7 @@ async fn shred_update_loop(
                     // finally we pass in the number of coding shreds into this branch 
                     // where it generates a Vec of indices of coding shreds randomly sampled  
                     // from the total number of coding shreds(max_shreds_per_slot).
-
+                   // let vec_rand_indices = n.into_iter().map(|i| gen_random_indices(i as usize, 10)).collect::<Vec<Vec<usize>>>();
                     if let Some(max_shreds_per_slot) = max_shreds_per_slot {
                         let indices = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
                         Some(indices)
