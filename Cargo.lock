@@ -1413,6 +1413,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dotenv"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
+
+[[package]]
 name = "eager"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1642,12 +1648,6 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "futures"
-version = "0.1.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a471a38ef8ed83cd6e40aa59c1ffe17db6855c18e3604d9c4ed8c08ebc28678"
-
-[[package]]
-name = "futures"
 version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13e2792b0ff0340399d58445b88fd9770e3489eff258a4cbc1523418f12abf84"
@@ -1872,7 +1872,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8af59a261bcf42f45d1b261232847b9b850ba0a1419d6100698246fb66e9240"
 dependencies = [
  "arc-swap",
- "futures 0.3.26",
+ "futures",
  "log",
  "reqwest",
  "serde",
@@ -2109,7 +2109,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca815a891b24fdfb243fa3239c86154392b0953ee584aa1a2a1f66d20cbe75cc"
 dependencies = [
  "bytes",
- "futures 0.3.26",
+ "futures",
  "headers",
  "http",
  "hyper",
@@ -2336,7 +2336,7 @@ version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14f7f76aef2d054868398427f6c54943cf3d1caa9a7ec7d0c38d69df97a965eb"
 dependencies = [
- "futures 0.3.26",
+ "futures",
  "futures-executor",
  "futures-util",
  "log",
@@ -3358,7 +3358,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d442770e2b1e244bb5eb03b31c79b65bb2568f413b899eaba850fa945a65954"
 dependencies = [
- "futures 0.3.26",
+ "futures",
  "native-tls",
  "tokio",
  "tokio-native-tls",
@@ -4393,7 +4393,7 @@ checksum = "41d1c5305e39e09653383c2c7244f2f78b3bcae37cf50c64cb4789c9f5096ec2"
 dependencies = [
  "base64 0.13.1",
  "bytes",
- "futures 0.3.26",
+ "futures",
  "http",
  "httparse",
  "log",
@@ -4501,7 +4501,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "enum_dispatch",
- "futures 0.3.26",
+ "futures",
  "futures-util",
  "indexmap",
  "indicatif",
@@ -4674,7 +4674,7 @@ dependencies = [
  "crossbeam-channel",
  "dashmap 4.0.2",
  "fs_extra",
- "futures 0.3.26",
+ "futures",
  "itertools",
  "lazy_static",
  "libc",
@@ -5007,7 +5007,7 @@ source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#
 dependencies = [
  "async-mutex",
  "async-trait",
- "futures 0.3.26",
+ "futures",
  "itertools",
  "lazy_static",
  "log",
@@ -5329,7 +5329,7 @@ dependencies = [
  "bzip2",
  "enum-iterator",
  "flate2",
- "futures 0.3.26",
+ "futures",
  "goauth",
  "http",
  "hyper",
@@ -5947,7 +5947,8 @@ dependencies = [
  "crossterm 0.26.0",
  "dashmap 5.4.0",
  "diesel",
- "futures 0.1.31",
+ "dotenv",
+ "futures",
  "itertools",
  "jsonrpsee",
  "lazy_static",

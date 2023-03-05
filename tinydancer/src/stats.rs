@@ -103,17 +103,3 @@ impl PerRequestVerificationStats{
         self.num_failed = num_failed;
     }
 }
-
-//alternate
-// #[derive(Default)]
-// pub(crate) struct SampleStatistics{
-//     total_requests: usize,
-//     whitelisted_requests: Option<usize>, //setting it to an option for now
-//     verified: usize, //no of shreds processed or verified
-//     verification_err: usize, //no of shreds errored
-// }
-// make a report stats fn here
-
-// fn report_sample_stats(){
-    
-// }

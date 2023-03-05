@@ -4,7 +4,7 @@ use crate::ui::crossterm::start_ui_loop;
 use crate::{convert_to_websocket, send_rpc_call, try_coerce_shred};
 use async_trait::async_trait;
 use crossbeam::channel::{Receiver, Sender};
-use futures::{AsyncSink, Sink};
+use futures::{ Sink};
 use itertools::Itertools;
 use rand::distributions::Uniform;
 use rand::prelude::*;
@@ -182,8 +182,8 @@ async fn shred_update_loop(
                     // right after it contains coding shred (ShredCode) (Option<ShredData> is None here). 
                     // Implementing Iterator trait over RpcShred should help here.
                   //  let vec_shreds: Vec<RpcShred> = _first_shred.result.shreds.into_iter().flatten().skip(1).step_by(2).collect();
-                    let vec_shreds: Vec<RpcShred> = _first_shred.result.shreds.into_iter().flatten().flatten().collect();
-                    println!("{:?}",vec_shreds);
+                    let vec_shreds: Vec<RpcShred> = _first_shred.result.shreds.into_iter().flatten().collect();
+                   // println!("{:?}",vec_shreds);
                     // let n: Vec<u16> = vec_shreds.into_iter().map(|s| match (s.clone().shred_data,
                     // s.clone().shred_code){
                     //     (Some(data_shred), None) => {
@@ -265,7 +265,7 @@ async fn shred_update_loop(
                 }
             };
            // println!("indices of: {:?}", shred_indices_for_slot);
-           // Next we pass the random indices of coding shreds below..
+           // Next we pass the random shred indices of coding shreds below..
             if let Some(shred_indices_for_slot) = shred_indices_for_slot.clone() {
                 // This is where we request random shreds
                 let shreds_for_slot = request_shreds(
