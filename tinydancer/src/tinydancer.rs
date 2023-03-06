@@ -6,8 +6,11 @@ use std::{env, thread::Result};
 // use tokio::time::Duration;
 use crate::{
     block_on,
+
     sampler::{ArchiveConfig, SampleService, SampleServiceConfig},
     ui::{UiConfig, UiService},
+    ui::crossterm::{UiService, UiConfig},
+
 };
 use async_trait::async_trait;
 // use log::info;
@@ -81,14 +84,17 @@ impl TinyDancer {
             archive_config,
         };
         let sample_service = SampleService::new(sample_service_config);
-        let ui_service = if enable_ui_service {
-            Some(UiService::new(UiConfig {}))
-        } else {
-            None
-        };
+        // let ui_config = UiConfig{
+        //     cluster: rpc_endpoint.clone()
+        // };
+        // let ui_service = if enable_ui_service {
+        //     Some(UiService::new(UiConfig {}))
+        // } else {
+        //     None
+        // };
         Self {
             config,
-            ui_service,
+            ui_service:None,
             sample_qty,
             sample_service,
         }
@@ -98,9 +104,9 @@ impl TinyDancer {
             .join()
             .await
             .expect("error in sample service thread");
-        if let Some(ui_service) = self.ui_service {
-            block_on!(async { ui_service.join().await }, "Ui Service Error");
-        }
+        // if let Some(ui_service) = self.ui_service {
+        //     block_on!(async { ui_service.join().await }, "Ui Service Error");
+        // }
     }
 }
 
