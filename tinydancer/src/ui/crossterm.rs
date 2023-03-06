@@ -1,32 +1,32 @@
+use crate::sampler::GetShredResponse;
+use crate::stats::{PerRequestSampleStats, PerRequestVerificationStats, SlotUpdateStats};
+use crate::tinydancer::{ClientService, Cluster, TinyDancer};
+use crate::ui::App;
+use async_trait::async_trait;
+use crossbeam::channel::{Receiver, Sender};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use crate::sampler::GetShredResponse;
-use async_trait::async_trait;
 use std::{any::Any, thread::Thread};
-use std::{fmt, thread::JoinHandle};
-use crate::tinydancer::{ClientService, TinyDancer, Cluster};
-use crossbeam::channel::{Receiver, Sender};
-use thiserror::Error;
-use crate::stats::{PerRequestSampleStats, PerRequestVerificationStats, SlotUpdateStats};
-use tokio::time::sleep;
 use std::{
     error::Error,
     io,
     time::{Duration, Instant},
 };
+use std::{fmt, thread::JoinHandle};
+use thiserror::Error;
+use tokio::time::sleep;
 use tui::{
     backend::{Backend, CrosstermBackend},
     Terminal,
 };
-use crate::ui::{App};
 
 use super::draw;
 
 pub struct UiConfig {
-    cluster: Cluster
+    cluster: Cluster,
 }
 pub struct UiService {
     //pub views: Vec<String>, //placeholder
@@ -55,7 +55,6 @@ pub struct UiService {
 //     }
 // }
 
-
 #[derive(Debug, Error)]
 pub struct ThreadJoinError {
     error: Box<dyn Any + Send>,
@@ -79,10 +78,7 @@ impl fmt::Display for ThreadJoinError {
 //     }
 // }
 
-
-
-
-pub fn display( 
+pub fn display(
     slot_list: Vec<usize>,
     r_list: Vec<(usize, usize, usize, usize)>,
     v_list: Vec<(usize, usize, usize)>,
@@ -119,8 +115,8 @@ fn run_app<B: Backend>(
     mut app: App,
     tick_rate: Duration,
 ) -> io::Result<()> {
-   // let events = Events::new(Duration::from_millis(200));
-    let mut last_tick =  Instant::now();
+    // let events = Events::new(Duration::from_millis(200));
+    let mut last_tick = Instant::now();
     loop {
         terminal.draw(|f| draw(f, &mut app))?;
 
@@ -135,7 +131,7 @@ fn run_app<B: Backend>(
                     KeyCode::Up => app.on_up(),
                     KeyCode::Right => app.on_right(),
                     KeyCode::Down => app.on_down(),
-                    
+
                     _ => {}
                 }
             }
@@ -150,26 +146,31 @@ fn run_app<B: Backend>(
     }
 }
 
-pub async fn start_ui_loop(
-   s_stats: Receiver<SlotUpdateStats>,
-   r_stats: Receiver<PerRequestSampleStats>,
-   v_stats: Receiver<PerRequestVerificationStats>,
-){
-  
-    loop{
-        
-        let (sx,rx, vx  )= (s_stats.recv(),r_stats.recv(), v_stats.recv());
-        if sx.is_ok() && rx.is_ok() && vx.is_ok(){
-            let mut s_vec = vec![];
-            let mut r_vec = vec![];
-            let mut v_vec = vec![];
-            s_vec.push( sx.unwrap().slots);
-            r_vec.push((rx.unwrap().slot as usize, rx.unwrap().total_sampled, rx.unwrap().num_data_shreds, rx.unwrap().num_coding_shreds));
-            v_vec.push((vx.unwrap().slot as usize, vx.unwrap().num_verified, vx.unwrap().num_failed));
-            display(s_vec, r_vec, v_vec).expect("TOTALLY FAILED");
-        }
-        else{
-            break;
-        }
+pub async fn start_ui_loop(//    s_stats: Receiver<SlotUpdateStats>,
+//    r_stats: Receiver<PerRequestSampleStats>,
+//    v_stats: Receiver<PerRequestVerificationStats>,
+) {
+    loop {
+        // let (sx, rx, vx) = (s_stats.recv(), r_stats.recv(), v_stats.recv());
+        // if sx.is_ok() && rx.is_ok() && vx.is_ok() {
+        //     let mut s_vec = vec![];
+        //     let mut r_vec = vec![];
+        //     let mut v_vec = vec![];
+        //     s_vec.push(sx.unwrap().slots);
+        //     r_vec.push((
+        //         rx.unwrap().slot as usize,
+        //         rx.unwrap().total_sampled,
+        //         rx.unwrap().num_data_shreds,
+        //         rx.unwrap().num_coding_shreds,
+        //     ));
+        //     v_vec.push((
+        //         vx.unwrap().slot as usize,
+        //         vx.unwrap().num_verified,
+        //         vx.unwrap().num_failed,
+        //     ));
+        //     display(s_vec, r_vec, v_vec).expect("TOTALLY FAILED");
+        // } else {
+        //     break;
+        // }
     }
 }

@@ -1,2 +1,4 @@
 **/target
 **.log
+tmp/
+.vscode/
