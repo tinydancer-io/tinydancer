@@ -82,35 +82,13 @@ impl ClientService<SampleServiceConfig> for SampleService {
             let (verified_shred_tx, verified_shred_rx) = crossbeam::channel::unbounded();
             threads.push(tokio::spawn(slot_update_loop(slot_update_tx, pub_sub)));
 
-            //from slot_update_loop to shred_verify_loop
-            // let (slot_tx, slot_rx) = crossbeam::channel::unbounded::<u64>();
-            // // from slot_update_loop to start_ui_loop
-            // let (ui_slot_tx, ui_slot_rx) = crossbeam::channel::unbounded::<SlotUpdateStats>();
-            // let (verification_stats_tx, verification_stats_rx) =
-            // crossbeam::channel::unbounded::<PerRequestVerificationStats>();
             let (per_req_tx, per_req_rx) = crossbeam::channel::unbounded::<PerRequestSampleStats>();
-            threads.push(tokio::spawn(slot_update_loop(
-                slot_update_tx,
-                // slot_tx,
-                // ui_slot_tx,
-                pub_sub,
-            )));
 
             threads.push(tokio::spawn(shred_update_loop(
                 slot_update_rx,
                 rpc_url,
                 shred_tx,
                 per_req_tx,
-            )));
-            threads.push(tokio::spawn(shred_verify_loop(
-                shred_rx,
-                // slot_rx,
-                // verification_stats_tx,
-            )));
-            threads.push(tokio::spawn(start_ui_loop(
-                // ui_slot_rx,
-                // per_req_rx,
-                // verification_stats_rx,
             )));
 
             threads.push(tokio::spawn(shred_verify_loop(shred_rx, verified_shred_tx)));
@@ -120,7 +98,7 @@ impl ClientService<SampleServiceConfig> for SampleService {
                     archive_config.clone(),
                 )));
             }
-
+            threads.push(tokio::spawn(start_ui_loop()));
             for thread in threads {
                 thread.await;
             }
@@ -424,32 +402,37 @@ pub async fn shred_verify_loop(
         // let first = rx.unwrap().0[0].unwrap().slot();
         let mut current_slot = 0u64;
         if let Ok((shreds, leader)) = rx {
-            shreds.par_iter().for_each(|sh| match sh {
-                Some(shred) => {
-                    let mut stat = 0usize;
-                    let mut failed_stat = 0usize;
-                    let verified = verify_sample(shred, leader);
-                    match verified {
-                        true => {
-                            stat += 1;
-                            info!(
-                                "sample {:?} verified for slot: {:?}",
-                                shred.index(),
-                                shred.slot()
-                            );
-                            match verified_shred_tx.send((shred.clone(), leader)) {
-                                Ok(_) => {}
-                                Err(e) => error!("Error verified_shred_tx: {}", e),
+            let ver_result = shreds
+                .par_iter()
+                .map(|sh| {
+                    if let Some(shred) = sh {
+                        let mut stat = 0usize;
+                        let mut failed_stat = 0usize;
+                        let verified = verify_sample(shred, leader);
+                        match verified {
+                            true => {
+                                stat += 1;
+                                info!(
+                                    "sample {:?} verified for slot: {:?}",
+                                    shred.index(),
+                                    shred.slot()
+                                );
+                                match verified_shred_tx.send((shred.clone(), leader)) {
+                                    Ok(_) => {}
+                                    Err(e) => error!("Error verified_shred_tx: {}", e),
+                                }
+                            }
+                            false => {
+                                failed_stat += 1;
+                                info!("sample INVALID for slot : {:?}", shred.slot())
                             }
                         }
-                        false => {
-                failed_stat += 1;
-              info!("sample INVALID for slot : {:?}", shred.slot())
-      }
+                        (stat, failed_stat)
+                        // sample_verification_stats.num_verified += stat;
+                        // sample_verification_stats.num_failed += failed_stat;
+                    } else {
+                        (0, 0)
                     }
-                    (stat, failed_stat)
-                    // sample_verification_stats.num_verified += stat;
-                    // sample_verification_stats.num_failed += failed_stat;
                 })
                 .collect::<Vec<(usize, usize)>>();
             let res = ver_result

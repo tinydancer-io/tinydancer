@@ -6,11 +6,8 @@ use std::{env, thread::Result};
 // use tokio::time::Duration;
 use crate::{
     block_on,
-
     sampler::{ArchiveConfig, SampleService, SampleServiceConfig},
-    ui::{UiConfig, UiService},
-    ui::crossterm::{UiService, UiConfig},
-
+    ui::crossterm::{UiConfig, UiService},
 };
 use async_trait::async_trait;
 // use log::info;
@@ -94,7 +91,7 @@ impl TinyDancer {
         // };
         Self {
             config,
-            ui_service:None,
+            ui_service: None,
             sample_qty,
             sample_service,
         }
@@ -123,7 +120,7 @@ pub fn endpoint(cluster: Cluster) -> String {
     match cluster {
         Cluster::Mainnet => String::from("https://api.mainnet-beta.solana.com"),
         Cluster::Devnet => String::from("https://api.devnet.solana.com"),
-        Cluster::Localnet => String::from("http://0.0.0.0:8899"),
+        Cluster::Localnet => String::from("http://45.250.255.91:8899"),
         Cluster::Custom(cluster) => cluster.to_string(),
     }
 }
