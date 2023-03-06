@@ -5959,11 +5959,14 @@ dependencies = [
  "rand 0.8.5",
  "rayon",
  "reqwest",
+ "rocksdb",
  "serde",
  "serde_derive",
  "serde_json",
+
  "solana-client",
  "solana-ledger",
+
  "solana-measure 1.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-metrics 1.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-pubsub-client",

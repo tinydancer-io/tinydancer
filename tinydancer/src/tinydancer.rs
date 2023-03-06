@@ -6,8 +6,11 @@ use std::{env, thread::Result};
 // use tokio::time::Duration;
 use crate::{
     block_on,
-    sampler::{SampleService, SampleServiceConfig}, ui::crossterm::{UiService, UiConfig},
-    // ui::{UiConfig, UiService},
+
+    sampler::{ArchiveConfig, SampleService, SampleServiceConfig},
+    ui::{UiConfig, UiService},
+    ui::crossterm::{UiService, UiConfig},
+
 };
 use async_trait::async_trait;
 // use log::info;
@@ -34,6 +37,7 @@ pub struct TinyDancerConfig {
     pub rpc_endpoint: Cluster,
     pub sample_qty: u64,
     pub enable_ui_service: bool,
+    pub archive_config: Option<ArchiveConfig>,
 }
 
 use solana_metrics::datapoint_info;
@@ -53,7 +57,7 @@ pub fn get_project_root() -> io::Result<PathBuf> {
             .any(|p| p.unwrap().file_name() == OsString::from("Cargo.lock"));
         if has_cargo {
             let mut path = PathBuf::from(p);
-            path.push("log");
+            // path.push("log");
             path.push("client.log");
             return Ok(path);
         }
@@ -67,15 +71,17 @@ impl TinyDancer {
     pub async fn new(config: TinyDancerConfig) -> Self {
         let path = get_project_root().unwrap();
         // datapoint_info!("log", ("test", "testvalue", String));
-
+        println!("{:?}", path);
         tiny_logger::setup_file_with_default(path.to_str().unwrap(), "RUST_LOG");
         let TinyDancerConfig {
             enable_ui_service,
             rpc_endpoint,
             sample_qty,
+            archive_config,
         } = config.clone();
         let sample_service_config = SampleServiceConfig {
-            cluster: rpc_endpoint.clone(),
+            cluster: rpc_endpoint,
+            archive_config,
         };
         let sample_service = SampleService::new(sample_service_config);
         // let ui_config = UiConfig{

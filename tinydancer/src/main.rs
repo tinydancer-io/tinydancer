@@ -30,6 +30,7 @@
 mod tinydancer;
 use std::io;
 
+use sampler::ArchiveConfig;
 use tinydancer::{Cluster, TinyDancer, TinyDancerConfig};
 mod macros;
 mod sampler;
@@ -43,6 +44,11 @@ async fn main() {
         enable_ui_service: false,
         rpc_endpoint: Cluster::Localnet,
         sample_qty: 10,
+
+        archive_config: Some(ArchiveConfig {
+            shred_archive_duration: 1000000,
+            archive_path: "tmp/shreds".to_string(),
+        }),
     };
     let client = TinyDancer::new(config).await;
     client.join().await;
