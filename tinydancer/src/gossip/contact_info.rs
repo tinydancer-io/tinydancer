@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::MAX_WALLCLOCK;
+pub const MAX_WALLCLOCK: u64 = 1_000_000_000_000_000;
 
 use {
     solana_sdk::{
@@ -20,17 +20,17 @@ pub struct ContactInfo {
     /// gossip address
     pub gossip: SocketAddr,
     /// address to connect to for replication
-    pub tvu: SocketAddr,
+    // pub tvu: SocketAddr,
     /// address to forward shreds to
-    pub tvu_forwards: SocketAddr,
+    // pub tvu_forwards: SocketAddr,
     /// address to send repair responses to
     pub repair: SocketAddr,
     /// transactions address
-    pub tpu: SocketAddr,
+    // pub tpu: SocketAddr,
     /// address to forward unprocessed transactions to
-    pub tpu_forwards: SocketAddr,
+    // pub tpu_forwards: SocketAddr,
     /// address to which to send bank state requests
-    pub tpu_vote: SocketAddr,
+    // pub tpu_vote: SocketAddr,
     /// address to which to send JSON-RPC requests
     pub rpc: SocketAddr,
     /// websocket for JSON-RPC push notifications
@@ -73,12 +73,12 @@ impl Default for ContactInfo {
         ContactInfo {
             id: Pubkey::default(),
             gossip: socketaddr_any!(),
-            tvu: socketaddr_any!(),
-            tvu_forwards: socketaddr_any!(),
+            // tvu: socketaddr_any!(),
+            // tvu_forwards: socketaddr_any!(),
             repair: socketaddr_any!(),
-            tpu: socketaddr_any!(),
-            tpu_forwards: socketaddr_any!(),
-            tpu_vote: socketaddr_any!(),
+            // tpu: socketaddr_any!(),
+            // tpu_forwards: socketaddr_any!(),
+            // tpu_vote: socketaddr_any!(),
             rpc: socketaddr_any!(),
             rpc_pubsub: socketaddr_any!(),
             serve_repair: socketaddr_any!(),
@@ -93,12 +93,12 @@ impl ContactInfo {
         Self {
             id: *id,
             gossip: socketaddr!("127.0.0.1:1234"),
-            tvu: socketaddr!("127.0.0.1:1235"),
-            tvu_forwards: socketaddr!("127.0.0.1:1236"),
+            // tvu: socketaddr!("127.0.0.1:1235"),
+            // tvu_forwards: socketaddr!("127.0.0.1:1236"),
             repair: socketaddr!("127.0.0.1:1237"),
-            tpu: socketaddr!("127.0.0.1:1238"),
-            tpu_forwards: socketaddr!("127.0.0.1:1239"),
-            tpu_vote: socketaddr!("127.0.0.1:1240"),
+            // tpu: socketaddr!("127.0.0.1:1238"),
+            // tpu_forwards: socketaddr!("127.0.0.1:1239"),
+            // tpu_vote: socketaddr!("127.0.0.1:1240"),
             rpc: socketaddr!("127.0.0.1:1241"),
             rpc_pubsub: socketaddr!("127.0.0.1:1242"),
             serve_repair: socketaddr!("127.0.0.1:1243"),
@@ -123,12 +123,12 @@ impl ContactInfo {
         Self {
             id: solana_sdk::pubkey::new_rand(),
             gossip: addr,
-            tvu: addr,
-            tvu_forwards: addr,
+            // tvu: addr,
+            // tvu_forwards: addr,
             repair: addr,
-            tpu: addr,
-            tpu_forwards: addr,
-            tpu_vote: addr,
+            // tpu: addr,
+            // tpu_forwards: addr,
+            // tpu_vote: addr,
             rpc: addr,
             rpc_pubsub: addr,
             serve_repair: addr,
@@ -158,12 +158,12 @@ impl ContactInfo {
         Self {
             id: *pubkey,
             gossip,
-            tvu,
-            tvu_forwards,
+            // tvu,
+            // tvu_forwards,
             repair,
-            tpu,
-            tpu_forwards,
-            tpu_vote,
+            // tpu,
+            // tpu_forwards,
+            // tpu_vote,
             rpc,
             rpc_pubsub,
             serve_repair,
@@ -209,22 +209,22 @@ impl ContactInfo {
         Self::is_valid_tvu_address(addr) && socket_addr_space.check(addr)
     }
 
-    pub fn client_facing_addr(&self) -> (SocketAddr, SocketAddr) {
-        (self.rpc, self.tpu)
-    }
+    // pub fn client_facing_addr(&self) -> (SocketAddr, SocketAddr) {
+    //     (self.rpc, self.tpu)
+    // }
 
-    pub fn valid_client_facing_addr(
-        &self,
-        socket_addr_space: &SocketAddrSpace,
-    ) -> Option<(SocketAddr, SocketAddr)> {
-        if ContactInfo::is_valid_address(&self.rpc, socket_addr_space)
-            && ContactInfo::is_valid_address(&self.tpu, socket_addr_space)
-        {
-            Some((self.rpc, self.tpu))
-        } else {
-            None
-        }
-    }
+    // pub fn valid_client_facing_addr(
+    //     &self,
+    //     socket_addr_space: &SocketAddrSpace,
+    // ) -> Option<(SocketAddr, SocketAddr)> {
+    //     if ContactInfo::is_valid_address(&self.rpc, socket_addr_space)
+    //         && ContactInfo::is_valid_address(&self.tpu, socket_addr_space)
+    //     {
+    //         Some((self.rpc, self.tpu))
+    //     } else {
+    //         None
+    //     }
+    // }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -297,24 +297,24 @@ mod tests {
     fn test_default() {
         let ci = ContactInfo::default();
         assert!(ci.gossip.ip().is_unspecified());
-        assert!(ci.tvu.ip().is_unspecified());
-        assert!(ci.tpu_forwards.ip().is_unspecified());
+        // assert!(ci.tvu.ip().is_unspecified());
+        // assert!(ci.tpu_forwards.ip().is_unspecified());
         assert!(ci.rpc.ip().is_unspecified());
         assert!(ci.rpc_pubsub.ip().is_unspecified());
-        assert!(ci.tpu.ip().is_unspecified());
-        assert!(ci.tpu_vote.ip().is_unspecified());
+        // assert!(ci.tpu.ip().is_unspecified());
+        // assert!(ci.tpu_vote.ip().is_unspecified());
         assert!(ci.serve_repair.ip().is_unspecified());
     }
     #[test]
     fn test_multicast() {
         let ci = ContactInfo::new_multicast();
         assert!(ci.gossip.ip().is_multicast());
-        assert!(ci.tvu.ip().is_multicast());
-        assert!(ci.tpu_forwards.ip().is_multicast());
+        // assert!(ci.tvu.ip().is_multicast());
+        // assert!(ci.tpu_forwards.ip().is_multicast());
         assert!(ci.rpc.ip().is_multicast());
         assert!(ci.rpc_pubsub.ip().is_multicast());
-        assert!(ci.tpu.ip().is_multicast());
-        assert!(ci.tpu_vote.ip().is_multicast());
+        // assert!(ci.tpu.ip().is_multicast());
+        // assert!(ci.tpu_vote.ip().is_multicast());
         assert!(ci.serve_repair.ip().is_multicast());
     }
     #[test]
@@ -322,23 +322,23 @@ mod tests {
         let addr = socketaddr!("127.0.0.1:10");
         let ci = ContactInfo::new_gossip_entry_point(&addr);
         assert_eq!(ci.gossip, addr);
-        assert!(ci.tvu.ip().is_unspecified());
-        assert!(ci.tpu_forwards.ip().is_unspecified());
+        // assert!(ci.tvu.ip().is_unspecified());
+        // assert!(ci.tpu_forwards.ip().is_unspecified());
         assert!(ci.rpc.ip().is_unspecified());
         assert!(ci.rpc_pubsub.ip().is_unspecified());
-        assert!(ci.tpu.ip().is_unspecified());
-        assert!(ci.tpu_vote.ip().is_unspecified());
+        // assert!(ci.tpu.ip().is_unspecified());
+        // assert!(ci.tpu_vote.ip().is_unspecified());
         assert!(ci.serve_repair.ip().is_unspecified());
     }
     #[test]
     fn test_socketaddr() {
         let addr = socketaddr!("127.0.0.1:10");
         let ci = ContactInfo::new_with_socketaddr(&addr);
-        assert_eq!(ci.tpu, addr);
-        assert_eq!(ci.tpu_vote.port(), 17);
+        // assert_eq!(ci.tpu, addr);
+        // assert_eq!(ci.tpu_vote.port(), 17);
         assert_eq!(ci.gossip.port(), 11);
-        assert_eq!(ci.tvu.port(), 12);
-        assert_eq!(ci.tpu_forwards.port(), 13);
+        // assert_eq!(ci.tvu.port(), 12);
+        // assert_eq!(ci.tpu_forwards.port(), 13);
         assert_eq!(ci.rpc.port(), rpc_port::DEFAULT_RPC_PORT);
         assert_eq!(ci.rpc_pubsub.port(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
         assert_eq!(ci.serve_repair.port(), 16);
@@ -353,9 +353,9 @@ mod tests {
         );
         assert_eq!(d1.id, keypair.pubkey());
         assert_eq!(d1.gossip, socketaddr!("127.0.0.1:1235"));
-        assert_eq!(d1.tvu, socketaddr!("127.0.0.1:1236"));
-        assert_eq!(d1.tpu_forwards, socketaddr!("127.0.0.1:1237"));
-        assert_eq!(d1.tpu, socketaddr!("127.0.0.1:1234"));
+        // assert_eq!(d1.tvu, socketaddr!("127.0.0.1:1236"));
+        // assert_eq!(d1.tpu_forwards, socketaddr!("127.0.0.1:1237"));
+        // assert_eq!(d1.tpu, socketaddr!("127.0.0.1:1234"));
         assert_eq!(
             d1.rpc,
             socketaddr!(format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PORT))
@@ -364,29 +364,29 @@ mod tests {
             d1.rpc_pubsub,
             socketaddr!(format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT))
         );
-        assert_eq!(d1.tvu_forwards, socketaddr!("127.0.0.1:1238"));
+        // assert_eq!(d1.tvu_forwards, socketaddr!("127.0.0.1:1238"));
         assert_eq!(d1.repair, socketaddr!("127.0.0.1:1239"));
         assert_eq!(d1.serve_repair, socketaddr!("127.0.0.1:1240"));
-        assert_eq!(d1.tpu_vote, socketaddr!("127.0.0.1:1241"));
+        // assert_eq!(d1.tpu_vote, socketaddr!("127.0.0.1:1241"));
     }
 
-    #[test]
-    fn test_valid_client_facing() {
-        let mut ci = ContactInfo::default();
-        assert_eq!(
-            ci.valid_client_facing_addr(&SocketAddrSpace::Unspecified),
-            None
-        );
-        ci.tpu = socketaddr!("127.0.0.1:123");
-        assert_eq!(
-            ci.valid_client_facing_addr(&SocketAddrSpace::Unspecified),
-            None
-        );
-        ci.rpc = socketaddr!("127.0.0.1:234");
-        assert!(ci
-            .valid_client_facing_addr(&SocketAddrSpace::Unspecified)
-            .is_some());
-    }
+    // #[test]
+    // fn test_valid_client_facing() {
+    //     let mut ci = ContactInfo::default();
+    //     assert_eq!(
+    //         ci.valid_client_facing_addr(&SocketAddrSpace::Unspecified),
+    //         None
+    //     );
+    //     ci.tpu = socketaddr!("127.0.0.1:123");
+    //     assert_eq!(
+    //         ci.valid_client_facing_addr(&SocketAddrSpace::Unspecified),
+    //         None
+    //     );
+    //     ci.rpc = socketaddr!("127.0.0.1:234");
+    //     assert!(ci
+    //         .valid_client_facing_addr(&SocketAddrSpace::Unspecified)
+    //         .is_some());
+    // }
 
     #[test]
     fn test_sanitize() {

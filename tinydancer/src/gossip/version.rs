@@ -1,3 +1,5 @@
+use solana_sdk::{pubkey::Pubkey, timing::timestamp};
+
 use {
     semver,
     serde_derive::{Deserialize, Serialize},
@@ -18,6 +20,8 @@ impl Sanitize for LegacyVersion {}
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Version {
+    pub from: Pubkey,
+    pub wallclock: u64,
     pub major: u16,
     pub minor: u16,
     pub patch: u16,
@@ -34,6 +38,8 @@ impl Version {
 impl From<LegacyVersion> for Version {
     fn from(legacy_version: LegacyVersion) -> Self {
         Self {
+            from: Pubkey::default(),
+            wallclock: timestamp(),
             major: legacy_version.major,
             minor: legacy_version.minor,
             patch: legacy_version.patch,
@@ -60,6 +66,8 @@ impl Default for Version {
                 .unwrap(),
         );
         Self {
+            from: Pubkey::default(),
+            wallclock: timestamp(),
             major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
             minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
             patch: env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),

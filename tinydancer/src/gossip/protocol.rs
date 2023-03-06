@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 
 use bincode::serialize;
 use rayon::prelude::*;
@@ -10,17 +10,18 @@ use solana_sdk::{
 };
 
 use super::{
+    contact_info::MAX_WALLCLOCK,
+    node_shreds::NodeShreds,
     ping_pong::{self, Pong},
-    CrdsValue, CrdsValueLabel, MAX_WALLCLOCK,
 };
 const GOSSIP_PING_TOKEN_SIZE: usize = 32;
 #[derive(Serialize, Deserialize, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum Protocol {
     /// Gossip protocol messages
-    PullRequest(CrdsFilter, CrdsValue),
-    PullResponse(Pubkey, Vec<CrdsValue>),
-    PushMessage(Pubkey, Vec<CrdsValue>),
+    PullRequest(CrdsFilter, TValue),
+    PullResponse(Pubkey, Vec<TValue>),
+    PushMessage(Pubkey, Vec<TValue>),
     // TODO: Remove the redundant outer pubkey here,
     // and use the inner PruneData.pubkey instead.
     PruneMessage(Pubkey, PruneData),
@@ -28,10 +29,65 @@ pub enum Protocol {
     PongMessage(Pong),
     // Update count_packets_received if new variants are added here.
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct TValue {
+    pub signature: Signature,
+    pub data: TData,
+}
+impl Sanitize for TValue {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        self.signature.sanitize()?;
+        self.data.sanitize()
+    }
+}
+impl Sanitize for TData {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        match self {
+            TData::ContactInfo(val) => val.sanitize(),
+            TData::NodeShreds(ns) => ns.sanitize(),
+        }
+    }
+}
+
+impl Signable for TValue {
+    fn pubkey(&self) -> Pubkey {
+        self.pubkey()
+    }
+
+    fn signable_data(&self) -> Cow<[u8]> {
+        Cow::Owned(serialize(&self.data).expect("failed to serialize CrdsData"))
+    }
+
+    fn get_signature(&self) -> Signature {
+        self.signature
+    }
+
+    fn set_signature(&mut self, signature: Signature) {
+        self.signature = signature
+    }
+
+    fn verify(&self) -> bool {
+        self.get_signature()
+            .verify(self.pubkey().as_ref(), self.signable_data().borrow())
+    }
+}
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum TData {
+    ContactInfo(Pubkey),
+    NodeShreds(NodeShreds),
+}
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CrdsFilter {
-    pub filter: CrdsValueLabel,
+    pub filter: TValueLabel,
 }
+
+#[derive(PartialEq, Hash, Eq, Clone, Debug, Serialize, Deserialize)]
+pub enum TValueLabel {
+    NodeShreds(Pubkey),
+    ContactInfo(Pubkey),
+}
+
 pub type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 impl Protocol {
     pub fn par_verify(self) -> Option<Self> {

@@ -1,7 +1,7 @@
 //! Sampler struct - incharge of sampling shreds
 // use rayon::prelude::*;
 
-use std::{env, thread::Result};
+use std::{env, net::SocketAddr, str::FromStr, thread::Result, vec};
 
 // use tokio::time::Duration;
 use crate::{
@@ -94,6 +94,7 @@ impl TinyDancer {
         let gossip_service = if enable_gossip {
             Some(GossipService::new(GossipConfig {
                 gossip_socket: String::from("0.0.0.0:5555"),
+                gossip_nodes: vec![SocketAddr::from_str("0.0.0.0:5555").unwrap()],
             }))
         } else {
             None
@@ -114,6 +115,12 @@ impl TinyDancer {
             .expect("error in sample service thread");
         if let Some(ui_service) = self.ui_service {
             block_on!(async { ui_service.join().await }, "Ui Service Error");
+        }
+        if let Some(gossip_service) = self.gossip_service {
+            block_on!(
+                async { gossip_service.join().await },
+                "Gossip Service Error"
+            );
         }
     }
 }
