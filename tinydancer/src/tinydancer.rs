@@ -120,7 +120,7 @@ pub fn endpoint(cluster: Cluster) -> String {
     match cluster {
         Cluster::Mainnet => String::from("https://api.mainnet-beta.solana.com"),
         Cluster::Devnet => String::from("https://api.devnet.solana.com"),
-        Cluster::Localnet => String::from("http://45.250.255.91:8899"),
+        Cluster::Localnet => String::from("http://0.0.0.0:8899"),
         Cluster::Custom(cluster) => cluster.to_string(),
     }
 }

@@ -1,4 +1,4 @@
-use crate::stats::{PerRequestSampleStats, PerRequestVerificationStats, SlotUpdateStats};
+use crate::stats::{PerRequestSampleStats, PerRequestVerificationStats, SlotUpdateStats, StatDBConfig, store_stats};
 use crate::tinydancer::{endpoint, ClientService, Cluster};
 use crate::ui::crossterm::start_ui_loop;
 use crate::{convert_to_websocket, send_rpc_call, try_coerce_shred};
@@ -51,6 +51,7 @@ use tokio::{
 use tungstenite::{connect, Message};
 use url::Url;
 const SHRED_CF: &'static str = &"archived_shreds";
+
 pub struct SampleService {
     sample_indices: Vec<u64>,
     // peers: Vec<(Pubkey, SocketAddr)>,
@@ -75,15 +76,16 @@ impl ClientService<SampleServiceConfig> for SampleService {
             let rpc_url = endpoint(config.cluster);
             let pub_sub = convert_to_websocket!(rpc_url);
             let mut threads = Vec::default();
-
+            let (slot_db_tx, slot_db_rx) = crossbeam::channel::unbounded::<SlotUpdateStats>();
             let (slot_update_tx, slot_update_rx) = crossbeam::channel::unbounded::<u64>();
             let (shred_tx, shred_rx) = crossbeam::channel::unbounded();
 
             let (verified_shred_tx, verified_shred_rx) = crossbeam::channel::unbounded();
-            threads.push(tokio::spawn(slot_update_loop(slot_update_tx, pub_sub)));
+            threads.push(tokio::spawn(slot_update_loop(slot_update_tx, pub_sub, slot_db_tx)));
 
             let (per_req_tx, per_req_rx) = crossbeam::channel::unbounded::<PerRequestSampleStats>();
 
+            let (verified_stats_tx, verified_stats_rx) = crossbeam::channel::unbounded::<PerRequestVerificationStats>();
             threads.push(tokio::spawn(shred_update_loop(
                 slot_update_rx,
                 rpc_url,
@@ -91,14 +93,22 @@ impl ClientService<SampleServiceConfig> for SampleService {
                 per_req_tx,
             )));
 
-            threads.push(tokio::spawn(shred_verify_loop(shred_rx, verified_shred_tx)));
+            threads.push(tokio::spawn(shred_verify_loop(shred_rx, verified_shred_tx, verified_stats_tx)));
             if let Some(archive_config) = config.archive_config {
                 threads.push(tokio::spawn(shred_archiver(
                     verified_shred_rx,
                     archive_config.clone(),
                 )));
             }
-            threads.push(tokio::spawn(start_ui_loop()));
+            threads.push(tokio::spawn(store_stats(StatDBConfig{
+                archive_duration: 1000000,
+                archive_path: "tmp/shreds".to_string(),
+            },
+            slot_db_rx,
+            per_req_rx,
+            verified_stats_rx
+            )));
+            threads.push(tokio::spawn(start_ui_loop( )));
             for thread in threads {
                 thread.await;
             }
@@ -137,8 +147,8 @@ pub async fn request_shreds(
 
 async fn slot_update_loop(
     slot_update_tx: Sender<u64>,
-    // ui_slot_tx: Sender<SlotUpdateStats>,
     pub_sub: String,
+    slot_db_tx: Sender<SlotUpdateStats>,
 ) {
     let (mut socket, _response) =
         connect(Url::parse(pub_sub.as_str()).unwrap()).expect("Can't connect to websocket");
@@ -160,12 +170,9 @@ async fn slot_update_loop(
                             // report slot or root from the response?
                             slot_update_stats.slots = res.params.result.root as usize;
                             // slot_tx.send(res.params.result.root as u64).expect("failed to send update to verifier thread");
-                            // ui_slot_tx.send(
-                            //     // SlotUpdateStats::new(
-                            //     //     res.params.result.root as usize,
-                            //     slot_update_stats
-
-                            // ).expect("failed");
+                            slot_db_tx.send(
+                                SlotUpdateStats::new(res.params.result.root as usize)
+                            ).expect("failed");
                         }
                         Err(e) => {
                             println!("error here: {:?} {:?}", e, res.params.result.root as u64);
@@ -352,7 +359,6 @@ async fn shred_update_loop(
                     {
                         info!("Received incomplete number of shreds, requested {:?} shreds for slot {:?} and received {:?}", shred_indices_for_slot.len(),slot, fullfill_count);
                     }
-                    //println!("MORTY! {:?}", per_request_sample_stats);
                     shred_tx
                         .send((shreds, leader))
                         .expect("shred tx send error");
@@ -391,6 +397,7 @@ pub fn verify_sample(shred: &Shred, leader: solana_ledger::shred::Pubkey) -> boo
 pub async fn shred_verify_loop(
     shred_rx: Receiver<(Vec<Option<Shred>>, solana_ledger::shred::Pubkey)>,
     verified_shred_tx: Sender<(Shred, solana_ledger::shred::Pubkey)>,
+    verification_stats_tx: Sender<PerRequestVerificationStats>,
 ) {
     let mut sample_verification_stats = &mut PerRequestVerificationStats::default();
 
@@ -442,9 +449,9 @@ pub async fn shred_verify_loop(
             sample_verification_stats.slot = current_slot;
             sample_verification_stats.num_verified = verified;
             sample_verification_stats.num_failed = failed;
-            // verification_stats_tx
-            //     .send(*sample_verification_stats)
-            //     .expect("failed to send");
+            verification_stats_tx
+                .send(*sample_verification_stats)
+                .expect("failed to send");
         } else {
             println!("None")
         }
@@ -484,7 +491,8 @@ pub async fn shred_archiver(
     }
 }
 
-fn put_serialized<T: serde::Serialize + std::fmt::Debug>(
+
+pub fn put_serialized<T: serde::Serialize + std::fmt::Debug>(
     instance: &rocksdb::DB,
     cf: &ColumnFamily,
     key: [u8; 32],
@@ -500,10 +508,10 @@ fn put_serialized<T: serde::Serialize + std::fmt::Debug>(
         )),
     }
 }
-fn get_serialized<T: DeserializeOwned>(
+pub fn get_serialized<T: DeserializeOwned>(
     instance: &rocksdb::DB,
     cf: &ColumnFamily,
-    key: [u8; 32],
+    key: &[u8],
 ) -> Result<Option<T>, String> {
     match instance.get_cf(cf, key) {
         Ok(opt) => match opt {
@@ -587,7 +595,7 @@ mod tests {
             178, 42, 248, 125, 178, 220, 242, 2, 204, 167, 239, 159, 88, 224,
         ];
         let cf = instance.cf_handle(SHRED_CF).unwrap();
-        let shred = get_serialized::<Shred>(&instance, cf, key);
+        let shred = get_serialized::<Shred>(&instance, cf, &key);
         assert!(
             shred.is_ok(),
             "error retrieving and serializing shred from db"

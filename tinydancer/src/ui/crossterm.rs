@@ -1,4 +1,4 @@
-use crate::sampler::GetShredResponse;
+use crate::sampler::{GetShredResponse, get_serialized};
 use crate::stats::{PerRequestSampleStats, PerRequestVerificationStats, SlotUpdateStats};
 use crate::tinydancer::{ClientService, Cluster, TinyDancer};
 use crate::ui::App;
@@ -15,6 +15,7 @@ use std::{
     io,
     time::{Duration, Instant},
 };
+use rocksdb::{DB, IteratorMode};
 use std::{fmt, thread::JoinHandle};
 use thiserror::Error;
 use tokio::time::sleep;
@@ -34,6 +35,11 @@ pub struct UiService {
     r_stats: Receiver<PerRequestSampleStats>,
     v_stats: Receiver<PerRequestVerificationStats>,
     pub ui_service_handle: JoinHandle<()>, // pub table: TableState,  // placeholder view
+}
+pub enum StatType{
+    SlotStats(Vec<usize>),
+    SampleStats(Vec<(usize, usize, usize, usize)>),
+    VerifiedStats(Vec<(usize, usize, usize)>)
 }
 // #[async_trait]
 // impl ClientService<UiConfig> for UiService {
@@ -79,8 +85,8 @@ impl fmt::Display for ThreadJoinError {
 // }
 
 pub fn display(
-    slot_list: Vec<usize>,
-    r_list: Vec<(usize, usize, usize, usize)>,
+    slot_list: (Vec<usize>),
+    r_list: StatType::SAVec<(usize, usize, usize, usize)>,
     v_list: Vec<(usize, usize, usize)>,
 ) -> Result<(), Box<dyn Error>> {
     // setup terminal
@@ -146,31 +152,32 @@ fn run_app<B: Backend>(
     }
 }
 
-pub async fn start_ui_loop(//    s_stats: Receiver<SlotUpdateStats>,
-//    r_stats: Receiver<PerRequestSampleStats>,
-//    v_stats: Receiver<PerRequestVerificationStats>,
+
+pub async fn start_ui_loop(
+    // db: &rocksdb::DB
 ) {
     loop {
-        // let (sx, rx, vx) = (s_stats.recv(), r_stats.recv(), v_stats.recv());
-        // if sx.is_ok() && rx.is_ok() && vx.is_ok() {
-        //     let mut s_vec = vec![];
-        //     let mut r_vec = vec![];
-        //     let mut v_vec = vec![];
-        //     s_vec.push(sx.unwrap().slots);
-        //     r_vec.push((
-        //         rx.unwrap().slot as usize,
-        //         rx.unwrap().total_sampled,
-        //         rx.unwrap().num_data_shreds,
-        //         rx.unwrap().num_coding_shreds,
-        //     ));
-        //     v_vec.push((
-        //         vx.unwrap().slot as usize,
-        //         vx.unwrap().num_verified,
-        //         vx.unwrap().num_failed,
-        //     ));
-        //     display(s_vec, r_vec, v_vec).expect("TOTALLY FAILED");
-        // } else {
-        //     break;
-        // }
+            let db = DB::open_default("tmp/shreds").unwrap();
+            let iter = db.full_iterator(IteratorMode::Start);
+            
+            let cfs = DB::list_cf(&rocksdb::Options::default(),"tmp/shreds").unwrap_or(vec![]);
+            
+            for item in iter{
+                let (key, _) = item.unwrap();
+                let stat_array =  cfs.iter().map(|cf| {
+                    let cf_handle = db.cf_handle(cf).unwrap();
+                    // let key = *key;
+                    let o =  match cf {
+                        SLOT_STATS => StatType::SlotStats(get_serialized::<Vec<usize>>(&db, cf_handle, &key).unwrap().unwrap()),
+                        SAMPLE_STATS => StatType::SampleStats(get_serialized::<Vec<(usize, usize, usize, usize)>>(&db, cf_handle, &key).unwrap().unwrap()),
+                        VERIFIED_STATS => StatType::VerifiedStats(get_serialized::<Vec<(usize,usize,usize)>>(&db, cf_handle, &key).unwrap().unwrap()),
+                    
+                    };
+                    o
+                  
+                }).collect::<Vec<StatType>>();
+                display(stat_array[0],stat_array[1],stat_array[2]).expect("TOTALLY FAILED");
+            }
+       
     }
 }
