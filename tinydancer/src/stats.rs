@@ -1,4 +1,7 @@
-use crate::sampler::{put_serialized, request_shreds, verify_sample};
+use crate::sampler::{
+    get_serialized, put_serialized, request_shreds, verify_sample, SAMPLE_STATS, SLOT_STATS,
+    VERIFIED_STATS,
+};
 use crate::tinydancer::{endpoint, ClientService, Cluster};
 use async_trait::async_trait;
 use crossbeam::channel::Receiver;
@@ -7,6 +10,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use solana_ledger::shred::Shred;
 use solana_metrics::datapoint_info;
+use solana_sdk::blake3::hash;
 use solana_sdk::hash::hashv;
 use solana_sdk::{
     clock::Slot, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey,
@@ -14,8 +18,10 @@ use solana_sdk::{
 };
 use std::collections::{HashMap, HashSet};
 use std::ops::AddAssign;
+use std::sync::Arc;
 use tiny_logger::logs::info;
 use tokio::task::JoinHandle;
+
 pub struct StatsService {
     stat_handle: JoinHandle<()>,
 }
@@ -23,10 +29,6 @@ pub struct StatsService {
 pub struct StatsServiceConfig {
     pub cluster: Cluster,
 }
-
-const SLOT_STATS: &'static str = "Slot_stats";
-const SAMPLE_STATS: &'static str = "Sample_stats";
-const VERIFIED_STATS: &'static str = "Verified_stats";
 
 // #[async_trait]
 // impl ClientService<StatsServiceConfig> for StatsService{
@@ -111,10 +113,11 @@ impl PerRequestVerificationStats {
 }
 
 pub async fn store_stats(
-    stat_config: StatDBConfig,
+    // stat_config: StatDBConfig,
     slot_db_rx: Receiver<SlotUpdateStats>,
     sample_stats_rx: Receiver<PerRequestSampleStats>,
     verified_stats_rx: Receiver<PerRequestVerificationStats>,
+    instance: Arc<rocksdb::DB>,
 ) {
     loop {
         let (sx, rx, vx) = (
@@ -138,26 +141,24 @@ pub async fn store_stats(
                 vx.unwrap().num_verified,
                 vx.unwrap().num_failed,
             ));
-            let mut opts = RocksOptions::default();
-            opts.create_if_missing(true);
-            opts.set_error_if_exists(false);
-            opts.create_missing_column_families(true);
-            let instance = DB::open_cf(
-                &opts,
-                "tmp/stats",
-                vec![SLOT_STATS, SAMPLE_STATS, VERIFIED_STATS],
-            )
-            .unwrap();
+
             let cf_one = instance.cf_handle(SLOT_STATS).unwrap();
             let cf_two = instance.cf_handle(SAMPLE_STATS).unwrap();
             let cf_three = instance.cf_handle(VERIFIED_STATS).unwrap();
-            let key = hashv(&[&sx.unwrap().slots.to_le_bytes()]);
+            println!("slot no: {:?}", &sx.unwrap().slots);
+            let key = &sx.unwrap().slots.to_le_bytes();
 
-            let put_response_one = put_serialized(&instance, cf_one, key.to_bytes(), &s_vec);
-            let put_response_two = put_serialized(&instance, cf_two, key.to_bytes(), &r_vec);
-            let put_response_three = put_serialized(&instance, cf_three, key.to_bytes(), &v_vec);
+            let put_response_one = put_serialized(&instance, cf_one, key, &s_vec);
+            let put_response_two = put_serialized(&instance, cf_two, key, &r_vec);
+            let put_response_three = put_serialized(&instance, cf_three, key, &v_vec);
+            // let s = get_serialized::<Vec<(usize, usize, usize, usize)>>(
+            //     &instance,
+            //     cf_two,
+            //     &key.to_bytes(),
+            // );
+            // println!("{:?} hello", s);
             match (put_response_one, put_response_two, put_response_three) {
-                (Ok(_), Ok(_), Ok(_)) => info!("stored"),
+                (Ok(_), Ok(_), Ok(_)) => info!("stored {:?}", &sx.unwrap().slots),
                 _ => info!("error in storage"),
             }
         }

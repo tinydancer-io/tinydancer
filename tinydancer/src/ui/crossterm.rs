@@ -1,4 +1,4 @@
-use crate::sampler::{get_serialized, GetShredResponse};
+use crate::sampler::{get_serialized, GetShredResponse, SAMPLE_STATS};
 use crate::stats::{PerRequestSampleStats, PerRequestVerificationStats, SlotUpdateStats};
 use crate::tinydancer::{ClientService, Cluster, TinyDancer};
 use crate::ui::App;
@@ -10,6 +10,8 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use rocksdb::{IteratorMode, DB};
+use solana_sdk::blake3::hash;
+use std::sync::Arc;
 use std::{any::Any, thread::Thread};
 use std::{
     error::Error,
@@ -154,85 +156,96 @@ fn run_app<B: Backend>(
     }
 }
 
-pub async fn start_ui_loop(// db: &rocksdb::DB
+pub async fn start_ui_loop(
+    // db: &rocksdb::DB
+    db: Arc<rocksdb::DB>,
 ) {
     loop {
-        let db = DB::open_default("tmp/stats").unwrap();
-        let iter = db.full_iterator(IteratorMode::Start);
+        println!("1");
 
+        let mut iter = db.raw_iterator();
+        println!("2");
         let cfs = DB::list_cf(&rocksdb::Options::default(), "tmp/stats").unwrap_or(vec![]);
+        let cf_handle = db.cf_handle(SAMPLE_STATS).unwrap();
+        let key: usize = 1136638 as usize;
+        let s =
+            get_serialized::<Vec<(usize, usize, usize, usize)>>(&db, cf_handle, &key.to_le_bytes());
+        // println!("{:?} s", iter);
 
-        for item in iter {
-            let (key, _) = item.unwrap();
-            let stat_array = cfs
-                .iter()
-                .map(|cf| {
-                    let cf_handle = db.cf_handle(cf).unwrap();
-                    // let key = *key;
-                    let o = match cf {
-                        SLOT_STATS => StatType::SlotStats(
-                            get_serialized::<Vec<usize>>(&db, cf_handle, &key)
-                                .unwrap()
-                                .unwrap(),
-                        ),
-                        SAMPLE_STATS => StatType::SampleStats(
-                            get_serialized::<Vec<(usize, usize, usize, usize)>>(
-                                &db, cf_handle, &key,
-                            )
-                            .unwrap()
-                            .unwrap(),
-                        ),
-                        VERIFIED_STATS => StatType::VerifiedStats(
-                            get_serialized::<Vec<(usize, usize, usize)>>(&db, cf_handle, &key)
-                                .unwrap()
-                                .unwrap(),
-                        ),
-                    };
-                    o
-                })
-                .collect::<Vec<StatType>>();
-            let slot_list = stat_array
-                .clone()
-                .into_iter()
-                .map(|s| {
-                    let st = if let StatType::SlotStats(st) = s {
-                        Some(st)
-                    } else {
-                        None
-                    };
-                    st
-                })
-                .flatten()
-                .collect::<Vec<Vec<usize>>>();
-            let r_list = stat_array
-                .clone()
-                .into_iter()
-                .map(|s| {
-                    let st = if let StatType::SampleStats(st) = s {
-                        Some(st)
-                    } else {
-                        None
-                    };
-                    st
-                })
-                .flatten()
-                .collect::<Vec<Vec<(usize, usize, usize, usize)>>>();
-            let v_list = stat_array
-                .clone()
-                .into_iter()
-                .map(|s| {
-                    let st = if let StatType::VerifiedStats(st) = s {
-                        Some(st)
-                    } else {
-                        None
-                    };
-                    st
-                })
-                .flatten()
-                .collect::<Vec<Vec<(usize, usize, usize)>>>();
-
-            display(slot_list[0].clone(), r_list[0].clone(), v_list[0].clone())
-                .expect("TOTALLY FAILED");
-        }
+        break;
+        // for item in iter {
+        //     let (key, _) = item.unwrap();
+        //     println!("key {:?}", key);
+        //     println!("4");
+        //     let stat_array = cfs
+        //         .iter()
+        //         .map(|cf| {
+        //             let cf_handle = db.cf_handle(cf).unwrap();
+        //             // let key = *key;
+        //             let o = match cf {
+        //                 SLOT_STATS => StatType::SlotStats(
+        //                     get_serialized::<Vec<usize>>(&db, cf_handle, &key)
+        //                         .unwrap()
+        //                         .unwrap(),
+        //                 ),
+        //                 SAMPLE_STATS => StatType::SampleStats(
+        //                     get_serialized::<Vec<(usize, usize, usize, usize)>>(
+        //                         &db, cf_handle, &key,
+        //                     )
+        //                     .unwrap()
+        //                     .unwrap(),
+        //                 ),
+        //                 VERIFIED_STATS => StatType::VerifiedStats(
+        //                     get_serialized::<Vec<(usize, usize, usize)>>(&db, cf_handle, &key)
+        //                         .unwrap()
+        //                         .unwrap(),
+        //                 ),
+        //             };
+        //             o
+        //         })
+        //         .collect::<Vec<StatType>>();
+        //     let slot_list = stat_array
+        //         .clone()
+        //         .into_iter()
+        //         .map(|s| {
+        //             let st = if let StatType::SlotStats(st) = s {
+        //                 Some(st)
+        //             } else {
+        //                 None
+        //             };
+        //             st
+        //         })
+        //         .flatten()
+        //         .collect::<Vec<Vec<usize>>>();
+        //     let r_list = stat_array
+        //         .clone()
+        //         .into_iter()
+        //         .map(|s| {
+        //             let st = if let StatType::SampleStats(st) = s {
+        //                 Some(st)
+        //             } else {
+        //                 None
+        //             };
+        //             st
+        //         })
+        //         .flatten()
+        //         .collect::<Vec<Vec<(usize, usize, usize, usize)>>>();
+        //     let v_list = stat_array
+        //         .clone()
+        //         .into_iter()
+        //         .map(|s| {
+        //             let st = if let StatType::VerifiedStats(st) = s {
+        //                 Some(st)
+        //             } else {
+        //                 None
+        //             };
+        //             st
+        //         })
+        //         .flatten()
+        //         .collect::<Vec<Vec<(usize, usize, usize)>>>();
+        //     println!("here");
+        //     display(slot_list[0].clone(), r_list[0].clone(), v_list[0].clone())
+        //         .expect("TOTALLY FAILED");
+        // }
     }
 }

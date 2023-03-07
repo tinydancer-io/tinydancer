@@ -52,7 +52,10 @@ use tokio::{
 };
 use tungstenite::{connect, Message};
 use url::Url;
-const SHRED_CF: &'static str = &"archived_shreds";
+pub const SHRED_CF: &'static str = &"archived_shreds";
+pub const SLOT_STATS: &'static str = &"Slot_stats";
+pub const SAMPLE_STATS: &'static str = &"Sample_stats";
+pub const VERIFIED_STATS: &'static str = &"Verified_stats";
 
 pub struct SampleService {
     sample_indices: Vec<u64>,
@@ -111,16 +114,30 @@ impl ClientService<SampleServiceConfig> for SampleService {
                     archive_config.clone(),
                 )));
             }
+            let mut opts = RocksOptions::default();
+            opts.create_if_missing(true);
+            opts.set_error_if_exists(false);
+            opts.create_missing_column_families(true);
+            let instance = DB::open_cf(
+                &opts,
+                "tmp/stats",
+                vec![SLOT_STATS, SAMPLE_STATS, VERIFIED_STATS],
+            )
+            .unwrap();
+            let instance = Arc::new(instance);
+            let store_instance = Arc::clone(&instance);
+            let read_instance = Arc::clone(&instance);
             threads.push(tokio::spawn(store_stats(
-                StatDBConfig {
-                    archive_duration: 1000000,
-                    archive_path: "tmp/shreds".to_string(),
-                },
+                // StatDBConfig {
+                //     archive_duration: 1000000,
+                //     archive_path: "tmp/shreds".to_string(),
+                // },
                 slot_db_rx,
                 per_req_rx,
                 verified_stats_rx,
+                store_instance,
             )));
-            threads.push(tokio::spawn(start_ui_loop()));
+            threads.push(tokio::spawn(start_ui_loop(read_instance)));
             for thread in threads {
                 thread.await;
             }
@@ -489,7 +506,7 @@ pub async fn shred_archiver(
             // match shred_cf {
             //     Some(cf_name) => {
             let cf = instance.cf_handle(SHRED_CF).unwrap();
-            let put_response = put_serialized(&instance, cf, key, &verified_shred);
+            let put_response = put_serialized(&instance, cf, &key, &verified_shred);
             match put_response {
                 Ok(_) => info!("Saved Shred {:?} to db", verified_shred.id().seed(&leader)),
                 Err(e) => error!("{:?}", e),
@@ -506,7 +523,7 @@ pub async fn shred_archiver(
 pub fn put_serialized<T: serde::Serialize + std::fmt::Debug>(
     instance: &rocksdb::DB,
     cf: &ColumnFamily,
-    key: [u8; 32],
+    key: &[u8],
     value: &T,
 ) -> Result<(), String> {
     match serde_json::to_string(&value) {
