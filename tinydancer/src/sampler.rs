@@ -1,4 +1,6 @@
-use crate::stats::{PerRequestSampleStats, PerRequestVerificationStats, SlotUpdateStats, StatDBConfig, store_stats};
+use crate::stats::{
+    store_stats, PerRequestSampleStats, PerRequestVerificationStats, SlotUpdateStats, StatDBConfig,
+};
 use crate::tinydancer::{endpoint, ClientService, Cluster};
 use crate::ui::crossterm::start_ui_loop;
 use crate::{convert_to_websocket, send_rpc_call, try_coerce_shred};
@@ -81,11 +83,16 @@ impl ClientService<SampleServiceConfig> for SampleService {
             let (shred_tx, shred_rx) = crossbeam::channel::unbounded();
 
             let (verified_shred_tx, verified_shred_rx) = crossbeam::channel::unbounded();
-            threads.push(tokio::spawn(slot_update_loop(slot_update_tx, pub_sub, slot_db_tx)));
+            threads.push(tokio::spawn(slot_update_loop(
+                slot_update_tx,
+                pub_sub,
+                slot_db_tx,
+            )));
 
             let (per_req_tx, per_req_rx) = crossbeam::channel::unbounded::<PerRequestSampleStats>();
 
-            let (verified_stats_tx, verified_stats_rx) = crossbeam::channel::unbounded::<PerRequestVerificationStats>();
+            let (verified_stats_tx, verified_stats_rx) =
+                crossbeam::channel::unbounded::<PerRequestVerificationStats>();
             threads.push(tokio::spawn(shred_update_loop(
                 slot_update_rx,
                 rpc_url,
@@ -93,22 +100,27 @@ impl ClientService<SampleServiceConfig> for SampleService {
                 per_req_tx,
             )));
 
-            threads.push(tokio::spawn(shred_verify_loop(shred_rx, verified_shred_tx, verified_stats_tx)));
+            threads.push(tokio::spawn(shred_verify_loop(
+                shred_rx,
+                verified_shred_tx,
+                verified_stats_tx,
+            )));
             if let Some(archive_config) = config.archive_config {
                 threads.push(tokio::spawn(shred_archiver(
                     verified_shred_rx,
                     archive_config.clone(),
                 )));
             }
-            threads.push(tokio::spawn(store_stats(StatDBConfig{
-                archive_duration: 1000000,
-                archive_path: "tmp/shreds".to_string(),
-            },
-            slot_db_rx,
-            per_req_rx,
-            verified_stats_rx
+            threads.push(tokio::spawn(store_stats(
+                StatDBConfig {
+                    archive_duration: 1000000,
+                    archive_path: "tmp/shreds".to_string(),
+                },
+                slot_db_rx,
+                per_req_rx,
+                verified_stats_rx,
             )));
-            threads.push(tokio::spawn(start_ui_loop( )));
+            threads.push(tokio::spawn(start_ui_loop()));
             for thread in threads {
                 thread.await;
             }
@@ -170,9 +182,9 @@ async fn slot_update_loop(
                             // report slot or root from the response?
                             slot_update_stats.slots = res.params.result.root as usize;
                             // slot_tx.send(res.params.result.root as u64).expect("failed to send update to verifier thread");
-                            slot_db_tx.send(
-                                SlotUpdateStats::new(res.params.result.root as usize)
-                            ).expect("failed");
+                            slot_db_tx
+                                .send(SlotUpdateStats::new(res.params.result.root as usize))
+                                .expect("failed");
                         }
                         Err(e) => {
                             println!("error here: {:?} {:?}", e, res.params.result.root as u64);
@@ -490,7 +502,6 @@ pub async fn shred_archiver(
         }
     }
 }
-
 
 pub fn put_serialized<T: serde::Serialize + std::fmt::Debug>(
     instance: &rocksdb::DB,
