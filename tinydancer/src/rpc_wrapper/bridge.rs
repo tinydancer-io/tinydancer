@@ -5,7 +5,7 @@ use crate::rpc_wrapper::{
     rpc::LiteRpcServer,
     tpu_manager::TpuManager,
     workers::{
-        BlockListener, Cleaner, MetricsCapture, TxSender, WireTransaction,
+        BlockListener, Cleaner, TxSender, WireTransaction,
     },
 };
 
@@ -111,8 +111,6 @@ impl LiteBridge {
             tx_send_interval,
         );
 
-        let metrics_capture = MetricsCapture::new(self.tx_sender.clone()).capture();
-
         let finalized_block_listener = self
             .block_listner
             .clone()
@@ -162,7 +160,6 @@ impl LiteBridge {
             tx_sender,
             finalized_block_listener,
             confirmed_block_listener,
-            metrics_capture,
             cleaner,
         ];
         Ok(services)
@@ -173,6 +170,8 @@ impl LiteBridge {
 impl LiteRpcServer for LiteBridge {
     async fn send_transaction(
         &self,
+        //BinaryEncoding encoded transactions have to be passed here which
+        // are basically of 'String' type.
         tx: String,
         send_transaction_config: Option<SendTransactionConfig>,
     ) -> crate::rpc_wrapper::rpc::Result<String> {

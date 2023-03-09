@@ -119,7 +119,10 @@ impl BlockListener {
             INCOMPLETE_CON_BLOCKS_RECV.inc();
         }
     }
-
+ // the function which can confirm whether or not our transaction processed or not
+ // it takes in the slot number and commitment (Confirmed in our case).
+ // It uses RpcClient to query the block at our given slot number and Rpc block config
+ //
     pub async fn index_slot(
         &self,
         slot: Slot,
@@ -159,6 +162,7 @@ impl BlockListener {
             info!("finalized slot {}", slot);
             FIN_BLOCKS_RECV.inc();
         } else {
+            info!("confirmed slot {}", slot);
             CON_BLOCKS_RECV.inc();
         };
 
@@ -173,8 +177,8 @@ impl BlockListener {
          };
 
         let blockhash = block.blockhash;
-        let parent_slot = block.parent_slot;
-
+        // let parent_slot = block.parent_slot;
+        // adds the block to the blockstore after querying it from the RpcClient
         self.block_store
             .add_block(
                 blockhash.clone(),

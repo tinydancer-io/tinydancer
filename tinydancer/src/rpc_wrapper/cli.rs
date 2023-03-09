@@ -27,7 +27,6 @@ pub struct Args {
     /// interval between clean
     #[arg(short = 'c', long, default_value_t = DEFAULT_CLEAN_INTERVAL_MS)]
     pub clean_interval_ms: u64,
-    /// enable metrics to prometheus at addr
     #[arg(short = 'k', long, default_value_t = String::new())]
     pub identity_keypair: String,
 }

@@ -30,10 +30,11 @@ pub type WireTransaction = Vec<u8>;
 /// Retry transactions to a maximum of `u16` times, keep a track of confirmed transactions
 #[derive(Clone)]
 pub struct TxSender {
+     /// TpuClient to call the tpu port
+     pub tpu_manager: Arc<TpuManager>,
     /// Tx(s) forwarded to tpu
     pub txs_sent: Arc<DashMap<String, TxProps>>,
-    /// TpuClient to call the tpu port
-    pub tpu_manager: Arc<TpuManager>,
+   
 }
 
 /// Transaction Properties
@@ -92,7 +93,7 @@ impl TxSender {
         };
 
     }
-
+    //++++++++++++++++++++<THIS METHOD IS USED INTERNALLY BY OUR CLIENT TO EXECUTE THE RECEIVED TXNS>+++++++++++++++++++++++++++++++++++++
     /// retry and confirm transactions every 2ms (avg time to confirm tx)
     pub fn execute(
         self,
@@ -100,7 +101,8 @@ impl TxSender {
         tx_batch_size: usize,
         tx_send_interval: Duration,
     ) -> JoinHandle<anyhow::Result<()>> {
-        let (batch_send, batch_recv) = async_channel::unbounded();
+        // the batch send functionality is still in works!
+        //let (batch_send, batch_recv) = async_channel::unbounded();
         tokio::spawn(async move {
             info!(
                 "Batching tx(s) with batch size of {tx_batch_size} every {}ms",
@@ -128,7 +130,7 @@ impl TxSender {
                     }
                 }
 
-                batch_send.send((sigs_and_slots, txs)).await?;
+               // batch_send.send((sigs_and_slots, txs)).await?;
             }
         })
     }
