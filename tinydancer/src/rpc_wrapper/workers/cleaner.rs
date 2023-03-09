@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use log::info;
+use tiny_logger::logs::info;
 use tokio::task::JoinHandle;
 
 use super::{BlockListener, TxSender};

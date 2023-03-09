@@ -2,7 +2,7 @@ use crate::tinydancer::{endpoint, ClientService, Cluster};
 use crate::{convert_to_websocket, send_rpc_call, try_coerce_shred};
 use async_trait::async_trait;
 use crossbeam::channel::{Receiver, Sender};
-use futures::{AsyncSink, Sink};
+use futures::Sink;
 use itertools::Itertools;
 use rand::distributions::Uniform;
 use rand::prelude::*;

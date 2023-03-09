@@ -5,9 +5,8 @@ use std::{
 
 use anyhow::bail;
 use dashmap::DashMap;
-use log::{info, warn};
-
 use prometheus::{register_counter, Counter};
+use tiny_logger::logs::{info, warn};
 use solana_transaction_status::TransactionStatus;
 use tokio::{
     sync::mpsc::{UnboundedReceiver},

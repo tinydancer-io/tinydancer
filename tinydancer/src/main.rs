@@ -35,6 +35,7 @@ use tinydancer::{Cluster, TinyDancer, TinyDancerConfig};
 mod macros;
 mod sampler;
 mod ui;
+mod rpc_wrapper;
 use clap::{ArgGroup, Parser, Subcommand};
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]

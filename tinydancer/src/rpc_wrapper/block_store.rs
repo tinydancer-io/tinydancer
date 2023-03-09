@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use dashmap::DashMap;
 
-use log::info;
+use tiny_logger::logs::info;
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig};
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::TransactionDetails;

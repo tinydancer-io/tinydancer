@@ -280,6 +280,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
 
 [[package]]
+name = "async-channel"
+version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf46fee83e5ccffc220104713af3292ff9bc7c64c7de289f66dae8e38d826833"
+dependencies = [
+ "concurrent-queue",
+ "event-listener",
+ "futures-core",
+]
+
+[[package]]
 name = "async-compression"
 version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -291,6 +302,15 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "async-lock"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa24f727524730b077666307f2734b4a1a1c57acb79193127dcc8914d5242dd7"
+dependencies = [
+ "event-listener",
 ]
 
 [[package]]
@@ -445,6 +465,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b645a089122eccb6111b4f81cbc1a49f5900ac4666bb93ac027feaecf15607bf"
 
 [[package]]
+name = "beef"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -597,6 +626,16 @@ name = "bs58"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "771fe0050b883fcc3ea2359b1a96bcfbc090b7116eae7c3c512c7a083fdf23d3"
+
+[[package]]
+name = "bstr"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ffdb39cb703212f3c11973452c2861b972f757b021158f3516ba10f2fa8b2c1"
+dependencies = [
+ "memchr",
+ "serde",
+]
 
 [[package]]
 name = "bumpalo"
@@ -863,6 +902,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "concurrent-queue"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c278839b831783b70278b14df4d45e1beb1aad306c07bb796637de9a0e323e8e"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "console"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -900,6 +948,26 @@ name = "const-oid"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4c78c047431fee22c1a7bb92e00ad095a02a983affe4d8a72e2a2c62c1b94f3"
+
+[[package]]
+name = "const_env"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e9e4f72c6e3398ca6da372abd9affd8f89781fe728869bbf986206e9af9627e"
+dependencies = [
+ "const_env_impl",
+]
+
+[[package]]
+name = "const_env_impl"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a4f51209740b5e1589e702b3044cdd4562cef41b6da404904192ffffb852d62"
+dependencies = [
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
 
 [[package]]
 name = "constant_time_eq"
@@ -1345,6 +1413,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dotenv"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
+
+[[package]]
 name = "eager"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1568,12 +1642,6 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "futures"
-version = "0.1.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a471a38ef8ed83cd6e40aa59c1ffe17db6855c18e3604d9c4ed8c08ebc28678"
-
-[[package]]
-name = "futures"
 version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13e2792b0ff0340399d58445b88fd9770e3489eff258a4cbc1523418f12abf84"
@@ -1642,6 +1710,16 @@ name = "futures-task"
 version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcf79a1bf610b10f42aea489289c5a2c478a786509693b80cd39c44ccd936366"
+
+[[package]]
+name = "futures-timer"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e64b03909df88034c26dc1547e8970b91f98bdb65165d6a4e9110d94263dbb2c"
+dependencies = [
+ "gloo-timers",
+ "send_wrapper",
+]
 
 [[package]]
 name = "futures-util"
@@ -1724,13 +1802,71 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
+name = "globset"
+version = "0.4.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "029d74589adefde59de1a0c4f4732695c32805624aec7b68d91503d4dba79afc"
+dependencies = [
+ "aho-corasick",
+ "bstr",
+ "fnv",
+ "log",
+ "regex",
+]
+
+[[package]]
+name = "gloo-net"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9902a044653b26b99f7e3693a42f171312d9be8b26b5697bd1e43ad1f8a35e10"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "futures-sink",
+ "gloo-utils",
+ "js-sys",
+ "pin-project",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b995a66bb87bebce9a0f4a95aed01daca4872c050bfcb21653361c03bc35e5c"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "gloo-utils"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8e8fc851e9c7b9852508bc6e3f690f452f474417e8545ec9857b7f7377036b5"
+dependencies = [
+ "js-sys",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "goauth"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8af59a261bcf42f45d1b261232847b9b850ba0a1419d6100698246fb66e9240"
 dependencies = [
  "arc-swap",
- "futures 0.3.26",
+ "futures",
  "log",
  "reqwest",
  "serde",
@@ -1967,7 +2103,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca815a891b24fdfb243fa3239c86154392b0953ee584aa1a2a1f66d20cbe75cc"
 dependencies = [
  "bytes",
- "futures 0.3.26",
+ "futures",
  "headers",
  "http",
  "hyper",
@@ -1986,9 +2122,12 @@ checksum = "1788965e61b367cd03a62950836d5cd41560c3577d90e40e0819373194d1661c"
 dependencies = [
  "http",
  "hyper",
+ "log",
  "rustls",
+ "rustls-native-certs",
  "tokio",
  "tokio-rustls",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -2192,13 +2331,175 @@ version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14f7f76aef2d054868398427f6c54943cf3d1caa9a7ec7d0c38d69df97a965eb"
 dependencies = [
- "futures 0.3.26",
+ "futures",
  "futures-executor",
  "futures-util",
  "log",
  "serde",
  "serde_derive",
  "serde_json",
+]
+
+[[package]]
+name = "jsonrpsee"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d291e3a5818a2384645fd9756362e6d89cf0541b0b916fa7702ea4a9833608e"
+dependencies = [
+ "jsonrpsee-client-transport",
+ "jsonrpsee-core",
+ "jsonrpsee-http-client",
+ "jsonrpsee-proc-macros",
+ "jsonrpsee-server",
+ "jsonrpsee-types",
+ "jsonrpsee-wasm-client",
+ "jsonrpsee-ws-client",
+ "tracing",
+]
+
+[[package]]
+name = "jsonrpsee-client-transport"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "965de52763f2004bc91ac5bcec504192440f0b568a5d621c59d9dbd6f886c3fb"
+dependencies = [
+ "anyhow",
+ "futures-channel",
+ "futures-timer",
+ "futures-util",
+ "gloo-net",
+ "http",
+ "jsonrpsee-core",
+ "jsonrpsee-types",
+ "pin-project",
+ "rustls-native-certs",
+ "soketto",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "webpki-roots",
+]
+
+[[package]]
+name = "jsonrpsee-core"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4e70b4439a751a5de7dd5ed55eacff78ebf4ffe0fc009cb1ebb11417f5b536b"
+dependencies = [
+ "anyhow",
+ "arrayvec",
+ "async-lock",
+ "async-trait",
+ "beef",
+ "futures-channel",
+ "futures-timer",
+ "futures-util",
+ "globset",
+ "hyper",
+ "jsonrpsee-types",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "soketto",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "jsonrpsee-http-client"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc345b0a43c6bc49b947ebeb936e886a419ee3d894421790c969cc56040542ad"
+dependencies = [
+ "async-trait",
+ "hyper",
+ "hyper-rustls",
+ "jsonrpsee-core",
+ "jsonrpsee-types",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "jsonrpsee-proc-macros"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baa6da1e4199c10d7b1d0a6e5e8bd8e55f351163b6f4b3cbb044672a69bd4c1c"
+dependencies = [
+ "heck",
+ "proc-macro-crate 1.3.0",
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
+
+[[package]]
+name = "jsonrpsee-server"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fb69dad85df79527c019659a992498d03f8495390496da2f07e6c24c2b356fc"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "http",
+ "hyper",
+ "jsonrpsee-core",
+ "jsonrpsee-types",
+ "serde",
+ "serde_json",
+ "soketto",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "jsonrpsee-types"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bd522fe1ce3702fd94812965d7bb7a3364b1c9aba743944c5a00529aae80f8c"
+dependencies = [
+ "anyhow",
+ "beef",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "jsonrpsee-wasm-client"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a77310456f43c6c89bcba1f6b2fc2a28300da7c341f320f5128f8c83cc63232d"
+dependencies = [
+ "jsonrpsee-client-transport",
+ "jsonrpsee-core",
+ "jsonrpsee-types",
+]
+
+[[package]]
+name = "jsonrpsee-ws-client"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b83daeecfc6517cfe210df24e570fb06213533dfb990318fae781f4c7119dd9"
+dependencies = [
+ "http",
+ "jsonrpsee-client-transport",
+ "jsonrpsee-core",
+ "jsonrpsee-types",
 ]
 
 [[package]]
@@ -2568,6 +2869,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nu-ansi-term"
+version = "0.46.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77a8165726e8236064dbb45459242600304b42a5ea24ee2948e18e023bf7ba84"
+dependencies = [
+ "overload",
+ "winapi",
+]
+
+[[package]]
 name = "num"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2807,6 +3118,12 @@ dependencies = [
  "quote 1.0.23",
  "syn 1.0.107",
 ]
+
+[[package]]
+name = "overload"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "parking_lot"
@@ -3081,6 +3398,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "prometheus"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "449811d15fbdf5ceb5c1144416066429cf82316e2ec8ce0c1f6f8a02e7bbcf8c"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "memchr",
+ "parking_lot 0.12.1",
+ "protobuf",
+ "thiserror",
+]
+
+[[package]]
 name = "prost"
 version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3134,6 +3466,12 @@ dependencies = [
  "bytes",
  "prost",
 ]
+
+[[package]]
+name = "protobuf"
+version = "2.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "protobuf-src"
@@ -3693,6 +4031,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "send_wrapper"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f638d531eccd6e23b980caf34876660d38e265409d8e99b397ab71eb3612fad0"
+
+[[package]]
 name = "serde"
 version = "1.0.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3773,7 +4117,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92761393ee4dc3ff8f4af487bd58f4307c9329bbedea02cac0089ad9c411e153"
 dependencies = [
  "dashmap 5.4.0",
- "futures 0.3.26",
+ "futures",
  "lazy_static",
  "log",
  "parking_lot 0.12.1",
@@ -3790,6 +4134,19 @@ dependencies = [
  "proc-macro2 1.0.51",
  "quote 1.0.23",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "sha-1"
+version = "0.9.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99cd6713db3cf16b6c84e06321e049a9b9f699826e16096d23bbcc44d15d51a6"
+dependencies = [
+ "block-buffer 0.9.0",
+ "cfg-if",
+ "cpufeatures",
+ "digest 0.9.0",
+ "opaque-debug",
 ]
 
 [[package]]
@@ -3858,6 +4215,15 @@ checksum = "bdf0c33fae925bdc080598b84bc15c55e7b9a4a43b3c704da051f977469691c9"
 dependencies = [
  "digest 0.10.6",
  "keccak",
+]
+
+[[package]]
+name = "sharded-slab"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "900fba806f70c630b0a382d0d825e17a0f19fcd059a2ade1ff237bcddf446b31"
+dependencies = [
+ "lazy_static",
 ]
 
 [[package]]
@@ -3963,6 +4329,22 @@ checksum = "02e2d2db9033d13a1567121ddd7a095ee144db4e1ca1b1bda3419bc0da294ebd"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "soketto"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41d1c5305e39e09653383c2c7244f2f78b3bcae37cf50c64cb4789c9f5096ec2"
+dependencies = [
+ "base64 0.13.1",
+ "bytes",
+ "futures",
+ "http",
+ "httparse",
+ "log",
+ "rand 0.8.5",
+ "sha-1 0.9.8",
 ]
 
 [[package]]
@@ -4136,8 +4518,25 @@ dependencies = [
  "clap 2.34.0",
  "rpassword",
  "solana-perf 1.15.0",
- "solana-remote-wallet",
+ "solana-remote-wallet 1.15.0",
  "solana-sdk 1.15.0",
+ "thiserror",
+ "tiny-bip39",
+ "uriparse",
+ "url",
+]
+
+[[package]]
+name = "solana-clap-utils"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "chrono",
+ "clap 2.34.0",
+ "rpassword",
+ "solana-perf 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-remote-wallet 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "thiserror",
  "tiny-bip39",
  "uriparse",
@@ -4151,7 +4550,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "enum_dispatch",
- "futures 0.3.26",
+ "futures",
  "futures-util",
  "indexmap",
  "indicatif",
@@ -4161,17 +4560,50 @@ dependencies = [
  "rayon",
  "solana-measure 1.15.0",
  "solana-metrics 1.15.0",
- "solana-net-utils",
- "solana-pubsub-client",
- "solana-quic-client",
- "solana-rpc-client",
- "solana-rpc-client-api",
- "solana-rpc-client-nonce-utils",
+ "solana-net-utils 1.15.0",
+ "solana-pubsub-client 1.15.0",
+ "solana-quic-client 1.15.0",
+ "solana-rpc-client 1.15.0",
+ "solana-rpc-client-api 1.15.0",
+ "solana-rpc-client-nonce-utils 1.15.0",
  "solana-sdk 1.15.0",
- "solana-streamer",
- "solana-thin-client",
- "solana-tpu-client",
- "solana-udp-client",
+ "solana-streamer 1.15.0",
+ "solana-thin-client 1.15.0",
+ "solana-tpu-client 1.15.0",
+ "solana-udp-client 1.15.0",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "solana-client"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "enum_dispatch",
+ "futures",
+ "futures-util",
+ "indexmap",
+ "indicatif",
+ "log",
+ "quinn",
+ "rand 0.7.3",
+ "rayon",
+ "solana-measure 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-metrics 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-net-utils 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-pubsub-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-quic-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-rpc-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-rpc-client-api 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-rpc-client-nonce-utils 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-streamer 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-thin-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-tpu-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-udp-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "thiserror",
  "tokio",
 ]
@@ -4406,7 +4838,7 @@ dependencies = [
  "crossbeam-channel",
  "dashmap 4.0.2",
  "fs_extra",
- "futures 0.3.26",
+ "futures",
  "itertools",
  "lazy_static",
  "libc",
@@ -4465,7 +4897,7 @@ dependencies = [
  "crossbeam-channel",
  "dashmap 4.0.2",
  "fs_extra",
- "futures 0.3.26",
+ "futures",
  "itertools",
  "lazy_static",
  "libc",
@@ -4640,7 +5072,28 @@ dependencies = [
  "socket2",
  "solana-logger 1.15.0",
  "solana-sdk 1.15.0",
- "solana-version",
+ "solana-version 1.15.0",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "solana-net-utils"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "bincode",
+ "clap 3.2.23",
+ "crossbeam-channel",
+ "log",
+ "nix",
+ "rand 0.7.3",
+ "serde",
+ "serde_derive",
+ "socket2",
+ "solana-logger 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-version 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "tokio",
  "url",
 ]
@@ -4919,8 +5372,32 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder 1.15.0",
- "solana-rpc-client-api",
+ "solana-rpc-client-api 1.15.0",
  "solana-sdk 1.15.0",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
+ "tungstenite 0.17.3",
+ "url",
+]
+
+[[package]]
+name = "solana-pubsub-client"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "crossbeam-channel",
+ "futures-util",
+ "log",
+ "reqwest",
+ "semver 1.0.16",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-rpc-client-api 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -4935,7 +5412,7 @@ version = "1.15.0"
 dependencies = [
  "async-mutex",
  "async-trait",
- "futures 0.3.26",
+ "futures",
  "itertools",
  "lazy_static",
  "log",
@@ -4945,11 +5422,37 @@ dependencies = [
  "rustls",
  "solana-measure 1.15.0",
  "solana-metrics 1.15.0",
- "solana-net-utils",
- "solana-rpc-client-api",
+ "solana-net-utils 1.15.0",
+ "solana-rpc-client-api 1.15.0",
  "solana-sdk 1.15.0",
- "solana-streamer",
- "solana-tpu-client",
+ "solana-streamer 1.15.0",
+ "solana-tpu-client 1.15.0",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "solana-quic-client"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "async-mutex",
+ "async-trait",
+ "futures",
+ "itertools",
+ "lazy_static",
+ "log",
+ "quinn",
+ "quinn-proto",
+ "quinn-udp",
+ "rustls",
+ "solana-measure 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-metrics 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-net-utils 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-rpc-client-api 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-streamer 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-tpu-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "thiserror",
  "tokio",
 ]
@@ -4989,6 +5492,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-remote-wallet"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "console",
+ "dialoguer",
+ "log",
+ "num-derive",
+ "num-traits",
+ "parking_lot 0.12.1",
+ "qstring",
+ "semver 1.0.16",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "thiserror",
+ "uriparse",
+]
+
+[[package]]
 name = "solana-rpc-client"
 version = "1.15.0"
 dependencies = [
@@ -5005,11 +5526,37 @@ dependencies = [
  "serde_json",
  "solana-account-decoder 1.15.0",
  "solana-ledger 1.15.0",
- "solana-rpc-client-api",
+ "solana-rpc-client-api 1.15.0",
  "solana-sdk 1.15.0",
  "solana-transaction-status 1.15.0",
- "solana-version",
+ "solana-version 1.15.0",
  "solana-vote-program 1.15.0",
+ "tokio",
+]
+
+[[package]]
+name = "solana-rpc-client"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "async-trait",
+ "base64 0.13.1",
+ "bincode",
+ "bs58",
+ "indicatif",
+ "log",
+ "reqwest",
+ "semver 1.0.16",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-ledger 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-rpc-client-api 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-transaction-status 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-version 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-vote-program 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "tokio",
 ]
 
@@ -5029,7 +5576,29 @@ dependencies = [
  "solana-ledger 1.15.0",
  "solana-sdk 1.15.0",
  "solana-transaction-status 1.15.0",
- "solana-version",
+ "solana-version 1.15.0",
+ "spl-token-2022",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-rpc-client-api"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "base64 0.13.1",
+ "bs58",
+ "jsonrpc-core",
+ "reqwest",
+ "semver 1.0.16",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-ledger 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-transaction-status 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-version 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "spl-token-2022",
  "thiserror",
 ]
@@ -5039,9 +5608,21 @@ name = "solana-rpc-client-nonce-utils"
 version = "1.15.0"
 dependencies = [
  "clap 2.34.0",
- "solana-clap-utils",
- "solana-rpc-client",
+ "solana-clap-utils 1.15.0",
+ "solana-rpc-client 1.15.0",
  "solana-sdk 1.15.0",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-rpc-client-nonce-utils"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "clap 2.34.0",
+ "solana-clap-utils 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-rpc-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "thiserror",
 ]
 
@@ -5395,7 +5976,7 @@ dependencies = [
  "bzip2",
  "enum-iterator",
  "flate2",
- "futures 0.3.26",
+ "futures",
  "goauth",
  "http",
  "hyper",
@@ -5428,7 +6009,7 @@ dependencies = [
  "bzip2",
  "enum-iterator",
  "flate2",
- "futures 0.3.26",
+ "futures",
  "goauth",
  "http",
  "hyper",
@@ -5511,15 +6092,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-streamer"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "crossbeam-channel",
+ "futures-util",
+ "histogram",
+ "indexmap",
+ "itertools",
+ "libc",
+ "log",
+ "nix",
+ "pem",
+ "percentage",
+ "pkcs8",
+ "quinn",
+ "quinn-proto",
+ "quinn-udp",
+ "rand 0.7.3",
+ "rcgen",
+ "rustls",
+ "solana-metrics 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-perf 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "thiserror",
+ "tokio",
+ "x509-parser",
+]
+
+[[package]]
 name = "solana-thin-client"
 version = "1.15.0"
 dependencies = [
  "bincode",
  "log",
- "solana-rpc-client",
- "solana-rpc-client-api",
+ "solana-rpc-client 1.15.0",
+ "solana-rpc-client-api 1.15.0",
  "solana-sdk 1.15.0",
- "solana-tpu-client",
+ "solana-tpu-client 1.15.0",
+]
+
+[[package]]
+name = "solana-thin-client"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "bincode",
+ "log",
+ "solana-rpc-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-rpc-client-api 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-tpu-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
 ]
 
 [[package]]
@@ -5536,11 +6160,35 @@ dependencies = [
  "rayon",
  "solana-measure 1.15.0",
  "solana-metrics 1.15.0",
- "solana-net-utils",
- "solana-pubsub-client",
- "solana-rpc-client",
- "solana-rpc-client-api",
+ "solana-net-utils 1.15.0",
+ "solana-pubsub-client 1.15.0",
+ "solana-rpc-client 1.15.0",
+ "solana-rpc-client-api 1.15.0",
  "solana-sdk 1.15.0",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "solana-tpu-client"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "futures-util",
+ "indexmap",
+ "indicatif",
+ "log",
+ "rand 0.7.3",
+ "rayon",
+ "solana-measure 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-metrics 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-net-utils 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-pubsub-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-rpc-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-rpc-client-api 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "thiserror",
  "tokio",
 ]
@@ -5599,10 +6247,24 @@ name = "solana-udp-client"
 version = "1.15.0"
 dependencies = [
  "async-trait",
- "solana-net-utils",
+ "solana-net-utils 1.15.0",
  "solana-sdk 1.15.0",
- "solana-streamer",
- "solana-tpu-client",
+ "solana-streamer 1.15.0",
+ "solana-tpu-client 1.15.0",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "solana-udp-client"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "async-trait",
+ "solana-net-utils 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-streamer 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-tpu-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "thiserror",
  "tokio",
 ]
@@ -5619,6 +6281,21 @@ dependencies = [
  "solana-frozen-abi 1.15.0",
  "solana-frozen-abi-macro 1.15.0",
  "solana-sdk 1.15.0",
+]
+
+[[package]]
+name = "solana-version"
+version = "1.15.0"
+source = "git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master#7ade3498e89ad192c14efa9fb4d59db5bb3ed8ca"
+dependencies = [
+ "log",
+ "rustc_version 0.4.0",
+ "semver 1.0.16",
+ "serde",
+ "serde_derive",
+ "solana-frozen-abi 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-frozen-abi-macro 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
 ]
 
 [[package]]
@@ -6040,6 +6717,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "thread_local"
+version = "1.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fdd6f064ccff2d6567adcb3873ca630700f00b5ad3f060c25b5dcfd9a4ce152"
+dependencies = [
+ "cfg-if",
+ "once_cell",
+]
+
+[[package]]
 name = "time"
 version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6121,8 +6808,8 @@ dependencies = [
  "serde_derive",
  "serial_test",
  "solana-bloom",
- "solana-clap-utils",
- "solana-client",
+ "solana-clap-utils 1.15.0",
+ "solana-client 1.15.0",
  "solana-entry 1.15.0",
  "solana-frozen-abi 1.15.0",
  "solana-frozen-abi-macro 1.15.0",
@@ -6130,15 +6817,15 @@ dependencies = [
  "solana-logger 1.15.0",
  "solana-measure 1.15.0",
  "solana-metrics 1.15.0",
- "solana-net-utils",
+ "solana-net-utils 1.15.0",
  "solana-perf 1.15.0",
  "solana-rayon-threadlimit 1.15.0",
  "solana-runtime 1.15.0",
  "solana-sdk 1.15.0",
- "solana-streamer",
- "solana-thin-client",
- "solana-tpu-client",
- "solana-version",
+ "solana-streamer 1.15.0",
+ "solana-thin-client 1.15.0",
+ "solana-tpu-client 1.15.0",
+ "solana-version 1.15.0",
  "solana-vote-program 1.15.0",
  "static_assertions",
  "thiserror",
@@ -6157,13 +6844,24 @@ dependencies = [
 name = "tinydancer"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-channel",
  "async-trait",
+ "base64 0.21.0",
+ "bincode",
+ "bs58",
  "clap 4.1.4",
+ "const_env",
  "crossbeam",
  "crossterm 0.26.0",
+ "dashmap 5.4.0",
  "diesel",
- "futures 0.1.31",
+ "dotenv",
+ "futures",
  "itertools",
+ "jsonrpsee",
+ "lazy_static",
+ "prometheus",
  "rand 0.8.5",
  "rayon",
  "reqwest",
@@ -6171,13 +6869,21 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "solana-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "solana-ledger 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "solana-measure 1.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-metrics 1.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk 1.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-quic-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-rpc-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-rpc-client-api 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-sdk 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-tpu-client 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-transaction-status 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
+ "solana-version 1.15.0 (git+https://github.com/tinydancer-io/diet-rpc-validator?branch=master)",
  "thiserror",
  "tiny-logger",
  "tokio",
+ "tracing-subscriber",
  "tui",
  "tungstenite 0.18.0",
  "url",
@@ -6295,6 +7001,7 @@ checksum = "0bb2e075f03b3d66d8d8785356224ba688d2906a371015e225beeb65ca92c740"
 dependencies = [
  "bytes",
  "futures-core",
+ "futures-io",
  "futures-sink",
  "pin-project-lite",
  "tokio",
@@ -6456,6 +7163,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24eb03ba0eab1fd845050058ce5e616558e8f8d8fca633e6b163fe25c797213a"
 dependencies = [
  "once_cell",
+ "valuable",
 ]
 
 [[package]]
@@ -6466,6 +7174,31 @@ checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
 dependencies = [
  "pin-project",
  "tracing",
+]
+
+[[package]]
+name = "tracing-log"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78ddad33d2d10b1ed7eb9d1f518a5674713876e97e5bb9b7345a7984fbb4f922"
+dependencies = [
+ "lazy_static",
+ "log",
+ "tracing-core",
+]
+
+[[package]]
+name = "tracing-subscriber"
+version = "0.3.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6176eae26dd70d0c919749377897b54a9276bd7061339665dd68777926b5a70"
+dependencies = [
+ "nu-ansi-term",
+ "sharded-slab",
+ "smallvec",
+ "thread_local",
+ "tracing-core",
+ "tracing-log",
 ]
 
 [[package]]
@@ -6507,7 +7240,7 @@ dependencies = [
  "log",
  "rand 0.8.5",
  "rustls",
- "sha-1",
+ "sha-1 0.10.1",
  "thiserror",
  "url",
  "utf-8",
@@ -6642,6 +7375,12 @@ name = "utf-8"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
+
+[[package]]
+name = "valuable"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 
 [[package]]
 name = "vcpkg"

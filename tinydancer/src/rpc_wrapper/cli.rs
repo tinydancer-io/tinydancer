@@ -28,8 +28,6 @@ pub struct Args {
     #[arg(short = 'c', long, default_value_t = DEFAULT_CLEAN_INTERVAL_MS)]
     pub clean_interval_ms: u64,
     /// enable metrics to prometheus at addr
-    #[arg(short = 'm', long, default_value_t = String::from("[::]:9091"))]
-    pub prometheus_addr: String,
     #[arg(short = 'k', long, default_value_t = String::new())]
     pub identity_keypair: String,
 }

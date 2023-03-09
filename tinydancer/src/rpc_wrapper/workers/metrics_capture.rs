@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use log::info;
+use tiny_logger::logs::info;
 use solana_transaction_status::TransactionConfirmationStatus;
 use tokio::{sync::RwLock, task::JoinHandle};
 

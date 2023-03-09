@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use log::info;
+use tiny_logger::logs::info;
 use solana_quic_client::{QuicConfig, QuicPool};
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;

@@ -5,7 +5,7 @@ use crate::rpc_wrapper::{
     rpc::LiteRpcServer,
     tpu_manager::TpuManager,
     workers::{
-        BlockListener, Cleaner, MetricsCapture, PrometheusSync, TxSender, WireTransaction,
+        BlockListener, Cleaner, MetricsCapture, TxSender, WireTransaction,
     },
 };
 
@@ -13,11 +13,10 @@ use std::{ops::Deref, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::bail;
 
-use log::info;
+use prometheus::{register_counter, opts, Counter};
+use tiny_logger::logs::{info, warn};
 
 use jsonrpsee::{server::ServerBuilder, types::SubscriptionResult, SubscriptionSink};
-
-use prometheus::{opts, register_counter, Counter};
 use solana_rpc_client::{nonblocking::rpc_client::RpcClient, rpc_client::SerializableTransaction};
 use solana_rpc_client_api::{
     config::{RpcContextConfig, RpcRequestAirdropConfig, RpcSignatureStatusConfig},
@@ -101,7 +100,6 @@ impl LiteBridge {
         tx_batch_size: usize,
         tx_send_interval: Duration,
         clean_interval: Duration,
-        prometheus_addr: T,
     ) -> anyhow::Result<Vec<JoinHandle<anyhow::Result<()>>>> {
 
         let (tx_send, tx_recv) = mpsc::unbounded_channel();
@@ -114,7 +112,6 @@ impl LiteBridge {
         );
 
         let metrics_capture = MetricsCapture::new(self.tx_sender.clone()).capture();
-        let prometheus_sync = PrometheusSync.sync(prometheus_addr);
 
         let finalized_block_listener = self
             .block_listner
@@ -166,7 +163,6 @@ impl LiteBridge {
             finalized_block_listener,
             confirmed_block_listener,
             metrics_capture,
-            prometheus_sync,
             cleaner,
         ];
         Ok(services)
@@ -206,7 +202,7 @@ impl LiteRpcServer for LiteBridge {
             .block_store
             .get_block_info(&tx.get_recent_blockhash().to_string())
             .await else {
-                log::warn!("block");
+                warn!("block");
                 return Err(jsonrpsee::core::Error::Custom("Blockhash not found in block store".to_string()));
         };
 

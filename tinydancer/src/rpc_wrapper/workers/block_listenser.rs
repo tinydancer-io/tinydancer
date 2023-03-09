@@ -6,8 +6,8 @@ use std::{
 
 use dashmap::DashMap;
 use jsonrpsee::SubscriptionSink;
-use log::{info, warn};
-use prometheus::{histogram_opts, opts, register_counter, register_histogram, Counter, Histogram};
+use prometheus::{Histogram, register_histogram, register_counter, Counter, opts, histogram_opts};
+use tiny_logger::logs::{info, warn};
 
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{

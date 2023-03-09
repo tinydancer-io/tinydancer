@@ -10,7 +10,7 @@ pub mod block_store;
 use crate::rpc_wrapper::bridge::LiteBridge;
 use std::{time::Duration, env};
 use anyhow::bail;
-use log::info;
+use tiny_logger::logs::info;
 use solana_sdk::signer::keypair::Keypair;
 use async_trait::async_trait;
 use clap::Parser;
@@ -90,7 +90,6 @@ impl ClientService<TransactionServiceConfig> for TransactionService{
                 tx_batch_interval_ms,
                 clean_interval_ms,
                 fanout_size,
-                prometheus_addr,
                 identity_keypair,
             } = Args::parse();
 
@@ -110,7 +109,6 @@ impl ClientService<TransactionServiceConfig> for TransactionService{
                 tx_batch_size,
                 tx_batch_interval_ms,
                 clean_interval_ms,
-                prometheus_addr,
             )
             .await?;
 
