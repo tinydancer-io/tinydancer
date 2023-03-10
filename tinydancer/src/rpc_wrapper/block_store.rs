@@ -1,19 +1,26 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
 use dashmap::DashMap;
 
 use tiny_logger::logs::info;
+use prometheus::core::GenericGauge;
+use prometheus::{opts, register_int_gauge};
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig};
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::TransactionDetails;
 use tokio::sync::RwLock;
 use tokio::time::Instant;
+lazy_static::lazy_static! {
+    static ref BLOCKS_IN_BLOCKSTORE: GenericGauge<prometheus::core::AtomicI64> = register_int_gauge!(opts!("literpc_blocks_in_blockstore", "Number of blocks in blockstore")).unwrap();
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct BlockInformation {
     pub slot: u64,
     pub block_height: u64,
+    pub instant: Instant,
 }
 
 #[derive(Clone)]
@@ -76,7 +83,14 @@ impl BlockStore {
             .block_height
             .context("Couldn't get block height of latest block for block store")?;
 
-        Ok((latest_block_hash, BlockInformation { slot, block_height }))
+        Ok((
+            latest_block_hash,
+            BlockInformation {
+                slot,
+                block_height,
+                instant: Instant::now(),
+            },
+        ))
     }
 
     pub async fn get_block_info(&self, blockhash: &str) -> Option<BlockInformation> {
@@ -132,12 +146,6 @@ impl BlockStore {
         // create context for add block metric
         {
             let mut last_add_block_metric = self.last_add_block_metric.write().await;
-
-            info!(
-                "{:?} {blockhash} with info {block_info:?}",
-                last_add_block_metric.elapsed()
-            );
-
             *last_add_block_metric = Instant::now();
         }
 
@@ -146,11 +154,37 @@ impl BlockStore {
         // ask the map what it doesn't have rn
         let slot = block_info.slot;
         self.blocks.insert(blockhash.clone(), block_info);
+        BLOCKS_IN_BLOCKSTORE.inc();
 
         let latest_block = self.get_latest_block_arc(commitment_config);
         if slot > latest_block.read().await.1.slot {
             *latest_block.write().await = (blockhash, block_info);
         }
     }
-}
 
+    pub async fn clean(&self, cleanup_duration: Duration) {
+        let latest_confirmed = self
+            .get_latest_blockhash(CommitmentConfig {
+                commitment: solana_sdk::commitment_config::CommitmentLevel::Confirmed,
+            })
+            .await;
+        let latest_finalized = self
+            .get_latest_blockhash(CommitmentConfig {
+                commitment: solana_sdk::commitment_config::CommitmentLevel::Confirmed,
+            })
+            .await;
+
+        let before_length = self.blocks.len();
+        self.blocks.retain(|k, v| {
+            v.instant.elapsed() < cleanup_duration
+                || k.eq(&latest_confirmed)
+                || k.eq(&latest_finalized)
+        });
+        BLOCKS_IN_BLOCKSTORE.set(self.blocks.len() as i64);
+
+        info!(
+            "Cleaned {} block info",
+            before_length.saturating_sub(self.blocks.len())
+        );
+    }
+}

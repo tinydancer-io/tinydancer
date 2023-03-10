@@ -1,6 +1,6 @@
 use crate::rpc_wrapper::{
     block_store::{BlockInformation, BlockStore},
-    config::{IsBlockHashValidConfig, SendTransactionConfig},
+    configs::{IsBlockHashValidConfig, SendTransactionConfig},
     encoding::BinaryEncoding,
     rpc::LiteRpcServer,
     tpu_manager::TpuManager,
@@ -13,10 +13,11 @@ use std::{ops::Deref, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::bail;
 
-use prometheus::{register_counter, opts, Counter};
 use tiny_logger::logs::{info, warn};
 
 use jsonrpsee::{server::ServerBuilder, types::SubscriptionResult, SubscriptionSink};
+
+use prometheus::{core::GenericGauge, opts, register_int_counter, register_int_gauge, IntCounter};
 use solana_rpc_client::{nonblocking::rpc_client::RpcClient, rpc_client::SerializableTransaction};
 use solana_rpc_client_api::{
     config::{RpcContextConfig, RpcRequestAirdropConfig, RpcSignatureStatusConfig},
@@ -34,21 +35,21 @@ use tokio::{
 };
 
 lazy_static::lazy_static! {
-    static ref RPC_SEND_TX: Counter =
-        register_counter!(opts!("rpc_send_tx", "RPC call send transaction")).unwrap();
-    static ref RPC_GET_LATEST_BLOCKHASH: Counter =
-        register_counter!(opts!("rpc_get_latest_blockhash", "RPC call to get latest block hash")).unwrap();
-    static ref RPC_IS_BLOCKHASH_VALID: Counter =
-        register_counter!(opts!("rpc_is_blockhash_valid", "RPC call to check if blockhash is vali calld")).unwrap();
-    static ref RPC_GET_SIGNATURE_STATUSES: Counter =
-        register_counter!(opts!("rpc_get_signature_statuses", "RPC call to get signature statuses")).unwrap();
-    static ref RPC_GET_VERSION: Counter =
-        register_counter!(opts!("rpc_get_version", "RPC call to version")).unwrap();
-    static ref RPC_REQUEST_AIRDROP: Counter =
-        register_counter!(opts!("rpc_airdrop", "RPC call to request airdrop")).unwrap();
-    static ref RPC_SIGNATURE_SUBSCRIBE: Counter =
-        register_counter!(opts!("rpc_signature_subscribe", "RPC call to subscribe to signature")).unwrap();
-
+    static ref RPC_SEND_TX: IntCounter =
+    register_int_counter!(opts!("literpc_rpc_send_tx", "RPC call send transaction")).unwrap();
+    static ref RPC_GET_LATEST_BLOCKHASH: IntCounter =
+    register_int_counter!(opts!("literpc_rpc_get_latest_blockhash", "RPC call to get latest block hash")).unwrap();
+    static ref RPC_IS_BLOCKHASH_VALID: IntCounter =
+    register_int_counter!(opts!("literpc_rpc_is_blockhash_valid", "RPC call to check if blockhash is vali calld")).unwrap();
+    static ref RPC_GET_SIGNATURE_STATUSES: IntCounter =
+    register_int_counter!(opts!("literpc_rpc_get_signature_statuses", "RPC call to get signature statuses")).unwrap();
+    static ref RPC_GET_VERSION: IntCounter =
+    register_int_counter!(opts!("literpc_rpc_get_version", "RPC call to version")).unwrap();
+    static ref RPC_REQUEST_AIRDROP: IntCounter =
+    register_int_counter!(opts!("literpc_rpc_airdrop", "RPC call to request airdrop")).unwrap();
+    static ref RPC_SIGNATURE_SUBSCRIBE: IntCounter =
+    register_int_counter!(opts!("literpc_rpc_signature_subscribe", "RPC call to subscribe to signature")).unwrap();
+    pub static ref TXS_IN_CHANNEL: GenericGauge<prometheus::core::AtomicI64> = register_int_gauge!(opts!("literpc_txs_in_channel", "Transactions in channel")).unwrap();
 }
 
 /// A bridge between clients and tpu
@@ -56,7 +57,7 @@ pub struct LiteBridge {
     pub rpc_client: Arc<RpcClient>,
     pub tpu_manager: Arc<TpuManager>,
     // None if LiteBridge is not executed
-    pub tx_send: Option<UnboundedSender<(String, WireTransaction, u64)>>,
+    pub tx_send_channel: Option<UnboundedSender<(String, WireTransaction, u64)>>,
     pub tx_sender: TxSender,
     pub block_listner: BlockListener,
     pub block_store: BlockStore,
@@ -84,7 +85,7 @@ impl LiteBridge {
         Ok(Self {
             rpc_client,
             tpu_manager,
-            tx_send: None,
+            tx_send_channel: None,
             tx_sender,
             block_listner,
             block_store,
@@ -103,7 +104,7 @@ impl LiteBridge {
     ) -> anyhow::Result<Vec<JoinHandle<anyhow::Result<()>>>> {
 
         let (tx_send, tx_recv) = mpsc::unbounded_channel();
-        self.tx_send = Some(tx_send);
+        self.tx_send_channel = Some(tx_send);
 
         let tx_sender = self.tx_sender.clone().execute(
             tx_recv,
@@ -121,8 +122,13 @@ impl LiteBridge {
             .clone()
             .listen(CommitmentConfig::confirmed());
 
-        let cleaner =
-            Cleaner::new(self.tx_sender.clone(), self.block_listner.clone()).start(clean_interval);
+        let cleaner = Cleaner::new(
+            self.tx_sender.clone(),
+            self.block_listner.clone(),
+            self.block_store.clone(),
+            self.tpu_manager.clone(),
+        )
+        .start(clean_interval);
 
         let rpc = self.into_rpc();
 
@@ -154,7 +160,7 @@ impl LiteBridge {
             (ws_server, http_server)
         };
 
-        let mut services = vec![
+        let services = vec![
             ws_server,
             http_server,
             tx_sender,
@@ -162,6 +168,7 @@ impl LiteBridge {
             confirmed_block_listener,
             cleaner,
         ];
+
         Ok(services)
     }
 }
@@ -170,8 +177,6 @@ impl LiteBridge {
 impl LiteRpcServer for LiteBridge {
     async fn send_transaction(
         &self,
-        //BinaryEncoding encoded transactions have to be passed here which
-        // are basically of 'String' type.
         tx: String,
         send_transaction_config: Option<SendTransactionConfig>,
     ) -> crate::rpc_wrapper::rpc::Result<String> {
@@ -205,11 +210,12 @@ impl LiteRpcServer for LiteBridge {
                 return Err(jsonrpsee::core::Error::Custom("Blockhash not found in block store".to_string()));
         };
 
-        self.tx_send
+        self.tx_send_channel
             .as_ref()
             .expect("Lite Bridge Not Executed")
             .send((sig.to_string(), raw_tx, slot))
             .unwrap();
+        TXS_IN_CHANNEL.inc();
 
         Ok(BinaryEncoding::Base58.encode(sig))
     }
@@ -224,8 +230,12 @@ impl LiteRpcServer for LiteBridge {
             .map(|config| config.commitment.unwrap_or_default())
             .unwrap_or_default();
 
-        let (blockhash, BlockInformation { slot, block_height }) =
-            self.block_store.get_latest_block(commitment_config).await;
+        let (
+            blockhash,
+            BlockInformation {
+                slot, block_height, ..
+            },
+        ) = self.block_store.get_latest_block(commitment_config).await;
 
         info!("glb {blockhash} {slot} {block_height}");
 
@@ -295,7 +305,7 @@ impl LiteRpcServer for LiteBridge {
             .iter()
             .map(|sig| {
                 self.tx_sender
-                    .txs_sent
+                    .txs_sent_store
                     .get(sig)
                     .and_then(|v| v.status.clone())
             })
@@ -351,7 +361,7 @@ impl LiteRpcServer for LiteBridge {
         };
 
         self.tx_sender
-            .txs_sent
+            .txs_sent_store
             .insert(airdrop_sig.clone(), Default::default());
 
         Ok(airdrop_sig)

@@ -1,6 +1,6 @@
 use solana_sdk::{signature::ParseSignatureError, transport::TransportError};
 
-use crate::encoding::BinaryCodecError;
+use crate::rpc_wrapper::encoding::BinaryCodecError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum JsonRpcError {

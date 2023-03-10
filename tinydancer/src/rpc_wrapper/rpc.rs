@@ -6,7 +6,7 @@ use solana_rpc_client_api::response::{Response as RpcResponse, RpcBlockhash, Rpc
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::TransactionStatus;
 
-use crate::rpc_wrapper::config::{IsBlockHashValidConfig, SendTransactionConfig};
+use crate::rpc_wrapper::configs::{IsBlockHashValidConfig, SendTransactionConfig};
 
 pub type Result<T> = std::result::Result<T, jsonrpsee::core::Error>;
 

@@ -1,7 +1,9 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use tiny_logger::logs::info;
 use tokio::task::JoinHandle;
+
+use crate::rpc_wrapper::{block_store::BlockStore, tpu_manager::TpuManager};
 
 use super::{BlockListener, TxSender};
 
@@ -10,49 +12,43 @@ use super::{BlockListener, TxSender};
 pub struct Cleaner {
     tx_sender: TxSender,
     block_listenser: BlockListener,
+    block_store: BlockStore,
+    tpu_manager: Arc<TpuManager>,
 }
 
 impl Cleaner {
-    pub fn new(tx_sender: TxSender, block_listenser: BlockListener) -> Self {
+    pub fn new(
+        tx_sender: TxSender,
+        block_listenser: BlockListener,
+        block_store: BlockStore,
+        tpu_manager: Arc<TpuManager>,
+    ) -> Self {
         Self {
             tx_sender,
             block_listenser,
+            block_store,
+            tpu_manager,
         }
     }
 
     pub fn clean_tx_sender(&self, ttl_duration: Duration) {
-        let mut to_remove = vec![];
-
-        for tx in self.tx_sender.txs_sent.iter() {
-            if tx.sent_at.elapsed() >= ttl_duration {
-                to_remove.push(tx.key().to_owned());
-            }
-        }
-
-        for to_remove in &to_remove {
-            self.tx_sender.txs_sent.remove(to_remove);
-        }
-
-        if !to_remove.is_empty() {
-            info!("Cleaned {} txs", to_remove.len());
-        }
+        let length_before = self.tx_sender.txs_sent_store.len();
+        self.tx_sender
+            .txs_sent_store
+            .retain(|_k, v| v.sent_at.elapsed() < ttl_duration);
+        info!(
+            "Cleaned {} transactions",
+            length_before - self.tx_sender.txs_sent_store.len()
+        );
     }
 
     /// Clean Signature Subscribers from Block Listeners
-    pub fn clean_block_listeners(&self) {
-        let mut to_remove = vec![];
+    pub fn clean_block_listeners(&self, ttl_duration: Duration) {
+        self.block_listenser.clean(ttl_duration);
+    }
 
-        for subscriber in self.block_listenser.signature_subscribers.iter() {
-            if subscriber.value().is_closed() {
-                to_remove.push(subscriber.key().to_owned());
-            }
-        }
-
-        for to_remove in &to_remove {
-            self.block_listenser.signature_subscribers.remove(to_remove);
-        }
-
-        info!("Cleaned {} Signature Subscribers", to_remove.len());
+    pub async fn clean_block_store(&self, ttl_duration: Duration) {
+        self.block_store.clean(ttl_duration).await;
     }
 
     pub fn start(self, ttl_duration: Duration) -> JoinHandle<anyhow::Result<()>> {
@@ -65,7 +61,9 @@ impl Cleaner {
                 ttl.tick().await;
 
                 self.clean_tx_sender(ttl_duration);
-                self.clean_block_listeners();
+                self.clean_block_listeners(ttl_duration);
+                self.clean_block_store(ttl_duration).await;
+                let _ = self.tpu_manager.reset_tpu_client().await;
             }
         })
     }

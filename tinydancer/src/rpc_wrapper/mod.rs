@@ -1,15 +1,16 @@
 pub mod rpc;
-pub mod config;
-//pub use config;
+pub mod configs;
 pub mod tpu_manager;
 pub mod encoding;
 pub mod bridge;
 pub mod workers;
-pub mod cli;
+// pub mod cli;
 pub mod block_store;
 use crate::rpc_wrapper::bridge::LiteBridge;
 use std::{time::Duration, env};
 use anyhow::bail;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_ledger::shred::Signer;
 use tiny_logger::logs::info;
 use solana_sdk::signer::keypair::Keypair;
 use async_trait::async_trait;
@@ -20,7 +21,7 @@ use tokio::task::JoinHandle;
 use dotenv::dotenv;
 use crate::tinydancer::{Cluster, ClientService};
 
-use self::cli::Args;
+// use self::cli::Args;
 
 #[from_env]
 pub const DEFAULT_RPC_ADDR: &str = "http://0.0.0.0:8899";
@@ -81,32 +82,36 @@ impl ClientService<TransactionServiceConfig> for TransactionService{
     type ServiceError = tokio::io::Error;
    fn new(config: TransactionServiceConfig) -> Self{
         let transaction_handle = tokio::spawn( async {
-            let Args {
-                rpc_addr,
-                ws_addr,
-                tx_batch_size,
-                lite_rpc_ws_addr,
-                lite_rpc_http_addr,
-                tx_batch_interval_ms,
-                clean_interval_ms,
-                fanout_size,
-                identity_keypair,
-            } = Args::parse();
+            // let Args {
+            //     rpc_addr,
+            //     ws_addr,
+            //     tx_batch_size,
+            //     lite_rpc_ws_addr,
+            //     lite_rpc_http_addr,
+            //     tx_batch_interval_ms,
+            //     clean_interval_ms,
+            //     fanout_size,
+            //     identity_keypair,
+            // } = Args::parse();
 
         dotenv().ok();
+        let rpc_client = RpcClient::new(DEFAULT_RPC_ADDR.to_string());
 
-        let identity = get_identity_keypair(&identity_keypair).await;
+        //let identity = get_identity_keypair(&identity_keypair).await;
+       // let blockhash = rpc_client.get_latest_blockhash().await.unwrap();
+        let payer = Keypair::new();
+        let airdrop_sign = rpc_client.request_airdrop(&payer.try_pubkey().unwrap(), 2000000000).await?;
+        print!("AIRDROP CONFIRMED:{}", airdrop_sign);
+        let tx_batch_interval_ms = Duration::from_millis(DEFAULT_TX_BATCH_INTERVAL_MS);
+        let clean_interval_ms = Duration::from_millis(DEFAULT_CLEAN_INTERVAL_MS);
 
-        let tx_batch_interval_ms = Duration::from_millis(tx_batch_interval_ms);
-        let clean_interval_ms = Duration::from_millis(clean_interval_ms);
-
-        let light_bridge = LiteBridge::new(rpc_addr, ws_addr, fanout_size, identity).await?;
+        let light_bridge = LiteBridge::new(String::from(DEFAULT_RPC_ADDR), String::from(DEFAULT_WS_ADDR), DEFAULT_FANOUT_SIZE, payer).await?;
 
         let services = light_bridge
             .start_services(
-                lite_rpc_http_addr,
-                lite_rpc_ws_addr,
-                tx_batch_size,
+                String::from("[::]:8890"),
+                String::from("[::]:8891"),
+                DEFAULT_TX_BATCH_SIZE,
                 tx_batch_interval_ms,
                 clean_interval_ms,
             )

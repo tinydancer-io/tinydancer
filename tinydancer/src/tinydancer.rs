@@ -7,7 +7,7 @@ use std::{env, thread::Result};
 use crate::{
     block_on,
     sampler::{ArchiveConfig, SampleService, SampleServiceConfig},
-    ui::{UiConfig, UiService},
+    ui::{UiConfig, UiService}, rpc_wrapper::{TransactionService, TransactionServiceConfig},
 };
 use async_trait::async_trait;
 // use log::info;
@@ -28,6 +28,7 @@ pub struct TinyDancer {
     ui_service: Option<UiService>,
     sample_qty: u64,
     config: TinyDancerConfig,
+    transaction_service: TransactionService,
 }
 #[derive(Clone)]
 pub struct TinyDancerConfig {
@@ -76,11 +77,15 @@ impl TinyDancer {
             sample_qty,
             archive_config,
         } = config.clone();
+        let rpc_cluster = rpc_endpoint.clone();
         let sample_service_config = SampleServiceConfig {
             cluster: rpc_endpoint,
             archive_config,
         };
         let sample_service = SampleService::new(sample_service_config);
+        let transaction_service =  TransactionService::new(TransactionServiceConfig{
+            cluster: rpc_cluster
+        });
         let ui_service = if enable_ui_service {
             Some(UiService::new(UiConfig {}))
         } else {
@@ -91,6 +96,7 @@ impl TinyDancer {
             ui_service,
             sample_qty,
             sample_service,
+            transaction_service,
         }
     }
     pub async fn join(self) {
@@ -98,6 +104,7 @@ impl TinyDancer {
             .join()
             .await
             .expect("error in sample service thread");
+        self.transaction_service.join().await.expect("ERROR IN SIMPLE PAYMENT SERVICE");
         if let Some(ui_service) = self.ui_service {
             block_on!(async { ui_service.join().await }, "Ui Service Error");
         }

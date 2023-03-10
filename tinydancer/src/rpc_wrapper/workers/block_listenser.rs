@@ -1,13 +1,16 @@
 use std::{
     collections::VecDeque,
-    sync::Arc,
-    time::{Duration, Instant},
+    sync::{atomic::AtomicU64, Arc},
+    time::Duration,
 };
 
 use dashmap::DashMap;
 use jsonrpsee::SubscriptionSink;
-use prometheus::{Histogram, register_histogram, register_counter, Counter, opts, histogram_opts};
 use tiny_logger::logs::{info, warn};
+use prometheus::{
+    core::GenericGauge, histogram_opts, opts, register_histogram, register_int_counter,
+    register_int_gauge, Histogram, IntCounter,
+};
 
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{
@@ -28,38 +31,43 @@ use solana_transaction_status::{
 use tokio::{
     sync::{mpsc::Sender, Mutex},
     task::JoinHandle,
+    time::Instant,
 };
 
 use crate::rpc_wrapper::{
     block_store::{BlockInformation, BlockStore},
-    // workers::{PostgresBlock, PostgresMsg, PostgresUpdateTx},
 };
 
-use super::{ TxProps, TxSender};
+use super::{TxProps, TxSender};
 
 lazy_static::lazy_static! {
     static ref TT_RECV_CON_BLOCK: Histogram = register_histogram!(histogram_opts!(
-        "tt_recv_con_block",
+        "literpc_tt_recv_con_block",
         "Time to receive confirmed block from block subscribe",
     ))
     .unwrap();
     static ref TT_RECV_FIN_BLOCK: Histogram = register_histogram!(histogram_opts!(
-        "tt_recv_fin_block",
+        "literpc_tt_recv_fin_block",
         "Time to receive finalized block from block subscribe",
     ))
     .unwrap();
-    static ref FIN_BLOCKS_RECV: Counter =
-        register_counter!(opts!("fin_blocks_recv", "Number of Finalized Blocks Received")).unwrap();
-    static ref CON_BLOCKS_RECV: Counter =
-        register_counter!(opts!("con_blocks_recv", "Number of Confirmed Blocks Received")).unwrap();
-    static ref INCOMPLETE_FIN_BLOCKS_RECV: Counter =
-        register_counter!(opts!("incomplete_fin_blocks_recv", "Number of Incomplete Finalized Blocks Received")).unwrap();
-    static ref INCOMPLETE_CON_BLOCKS_RECV: Counter =
-        register_counter!(opts!("incomplete_con_blocks_recv", "Number of Incomplete Confirmed Blocks Received")).unwrap();
-    static ref TXS_CONFIRMED: Counter =
-        register_counter!(opts!("txs_confirmed", "Number of Transactions Confirmed")).unwrap();
-    static ref TXS_FINALIZED: Counter =
-        register_counter!(opts!("txs_finalized", "Number of Transactions Finalized")).unwrap();
+    static ref FIN_BLOCKS_RECV: IntCounter =
+    register_int_counter!(opts!("literpc_fin_blocks_recv", "Number of Finalized Blocks Received")).unwrap();
+    static ref CON_BLOCKS_RECV: IntCounter =
+    register_int_counter!(opts!("literpc_con_blocks_recv", "Number of Confirmed Blocks Received")).unwrap();
+    static ref INCOMPLETE_FIN_BLOCKS_RECV: IntCounter =
+    register_int_counter!(opts!("literpc_incomplete_fin_blocks_recv", "Number of Incomplete Finalized Blocks Received")).unwrap();
+    static ref INCOMPLETE_CON_BLOCKS_RECV: IntCounter =
+    register_int_counter!(opts!("literpc_incomplete_con_blocks_recv", "Number of Incomplete Confirmed Blocks Received")).unwrap();
+    static ref TXS_CONFIRMED: IntCounter =
+    register_int_counter!(opts!("literpc_txs_confirmed", "Number of Transactions Confirmed")).unwrap();
+    static ref TXS_FINALIZED: IntCounter =
+    register_int_counter!(opts!("literpc_txs_finalized", "Number of Transactions Finalized")).unwrap();
+    static ref ERRORS_WHILE_FETCHING_SLOTS: IntCounter =
+    register_int_counter!(opts!("literpc_txs_finalized", "Number of Transactions Finalized")).unwrap();
+    static ref BLOCKS_IN_QUEUE: GenericGauge<prometheus::core::AtomicI64> = register_int_gauge!(opts!("literpc_blocks_in_queue", "Number of blocks waiting to deque")).unwrap();
+    static ref BLOCKS_IN_RETRY_QUEUE: GenericGauge<prometheus::core::AtomicI64> = register_int_gauge!(opts!("literpc_blocks_in_retry_queue", "Number of blocks waiting in retry")).unwrap();
+    static ref NUMBER_OF_SIGNATURE_SUBSCRIBERS: GenericGauge<prometheus::core::AtomicI64> = register_int_gauge!(opts!("literpc_number_of_signature_sub", "Number of signature subscriber")).unwrap();
 }
 
 /// Background worker which listen's to new blocks
@@ -69,7 +77,7 @@ pub struct BlockListener {
     tx_sender: TxSender,
     block_store: BlockStore,
     rpc_client: Arc<RpcClient>,
-    pub signature_subscribers: Arc<DashMap<(String, CommitmentConfig), SubscriptionSink>>,
+    signature_subscribers: Arc<DashMap<(String, CommitmentConfig), (SubscriptionSink, Instant)>>,
 }
 
 pub struct BlockListnerNotificatons {
@@ -90,11 +98,25 @@ impl BlockListener {
     pub async fn num_of_sigs_commited(&self, sigs: &[String]) -> usize {
         let mut num_of_sigs_commited = 0;
         for sig in sigs {
-            if self.tx_sender.txs_sent.contains_key(sig) {
+            if self.tx_sender.txs_sent_store.contains_key(sig) {
                 num_of_sigs_commited += 1;
             }
         }
         num_of_sigs_commited
+    }
+
+    #[allow(deprecated)]
+    fn get_supported_commitment_config(commitment_config: CommitmentConfig) -> CommitmentConfig {
+        match commitment_config.commitment {
+            CommitmentLevel::Finalized | CommitmentLevel::Root | CommitmentLevel::Max => {
+                CommitmentConfig {
+                    commitment: CommitmentLevel::Finalized,
+                }
+            }
+            _ => CommitmentConfig {
+                commitment: CommitmentLevel::Confirmed,
+            },
+        }
     }
 
     pub fn signature_subscribe(
@@ -103,13 +125,17 @@ impl BlockListener {
         commitment_config: CommitmentConfig,
         sink: SubscriptionSink,
     ) {
+        let commitment_config = Self::get_supported_commitment_config(commitment_config);
         self.signature_subscribers
-            .insert((signature, commitment_config), sink);
+            .insert((signature, commitment_config), (sink, Instant::now()));
+        NUMBER_OF_SIGNATURE_SUBSCRIBERS.inc();
     }
 
     pub fn signature_un_subscribe(&self, signature: String, commitment_config: CommitmentConfig) {
+        let commitment_config = Self::get_supported_commitment_config(commitment_config);
         self.signature_subscribers
             .remove(&(signature, commitment_config));
+        NUMBER_OF_SIGNATURE_SUBSCRIBERS.dec();
     }
 
     fn increment_invalid_block_metric(commitment_config: CommitmentConfig) {
@@ -119,10 +145,7 @@ impl BlockListener {
             INCOMPLETE_CON_BLOCKS_RECV.inc();
         }
     }
- // the function which can confirm whether or not our transaction processed or not
- // it takes in the slot number and commitment (Confirmed in our case).
- // It uses RpcClient to query the block at our given slot number and Rpc block config
- //
+
     pub async fn index_slot(
         &self,
         slot: Slot,
@@ -155,14 +178,11 @@ impl BlockListener {
                 },
             )
             .await?;
-
         timer.observe_duration();
 
         if commitment_config.is_finalized() {
-            info!("finalized slot {}", slot);
             FIN_BLOCKS_RECV.inc();
         } else {
-            info!("confirmed slot {}", slot);
             CON_BLOCKS_RECV.inc();
         };
 
@@ -177,12 +197,16 @@ impl BlockListener {
          };
 
         let blockhash = block.blockhash;
-        // let parent_slot = block.parent_slot;
-        // adds the block to the blockstore after querying it from the RpcClient
+        //let parent_slot = block.parent_slot;
+
         self.block_store
             .add_block(
                 blockhash.clone(),
-                BlockInformation { slot, block_height },
+                BlockInformation {
+                    slot,
+                    block_height,
+                    instant: Instant::now(),
+                },
                 commitment_config,
             )
             .await;
@@ -204,7 +228,7 @@ impl BlockListener {
             transactions_processed += 1;
             let sig = tx.signatures[0].to_string();
 
-            if let Some(mut tx_status) = self.tx_sender.txs_sent.get_mut(&sig) {
+            if let Some(mut tx_status) = self.tx_sender.txs_sent_store.get_mut(&sig) {
                 //
                 // Metrics
                 //
@@ -223,10 +247,12 @@ impl BlockListener {
                     err: err.clone(),
                     confirmation_status: Some(comfirmation_status.clone()),
                 });
+
+                
             };
 
             // subscribers
-            if let Some((_sig, mut sink)) =
+            if let Some((_sig, (mut sink, _))) =
                 self.signature_subscribers.remove(&(sig, commitment_config))
             {
                 // none if transaction succeeded
@@ -237,6 +263,7 @@ impl BlockListener {
                     },
                     value: serde_json::json!({ "err": err }),
                 })?;
+                NUMBER_OF_SIGNATURE_SUBSCRIBERS.dec();
             }
         }
 
@@ -298,6 +325,7 @@ impl BlockListener {
                                 .checked_add(Duration::from_millis(100))
                                 .unwrap();
                             let _ = slot_retry_queue_sx.send((slot, error_count, retry_at));
+                            BLOCKS_IN_RETRY_QUEUE.inc();
                         }
                     };
                 }
@@ -305,12 +333,24 @@ impl BlockListener {
         }
 
         // a task that will queue back the slots to be retried after a certain delay
+        let recent_slot = Arc::new(AtomicU64::new(0));
         {
             let slots_task_queue = slots_task_queue.clone();
+            let recent_slot = recent_slot.clone();
             tokio::spawn(async move {
                 loop {
                     match slot_retry_queue_rx.recv().await {
                         Some((slot, error_count, instant)) => {
+                            BLOCKS_IN_RETRY_QUEUE.dec();
+                            let recent_slot =
+                                recent_slot.load(std::sync::atomic::Ordering::Relaxed);
+                            // if slot is too old ignore
+                            if recent_slot.saturating_sub(slot) > 256 {
+                                // slot too old to retry
+                                // most probably its an empty slot
+                                continue;
+                            }
+
                             let now = tokio::time::Instant::now();
                             if now < instant {
                                 tokio::time::sleep_until(instant).await;
@@ -336,17 +376,24 @@ impl BlockListener {
                 .slot;
             // -5 for warmup
             let mut last_latest_slot = last_latest_slot - 5;
+            recent_slot.store(last_latest_slot, std::sync::atomic::Ordering::Relaxed);
 
             // storage for recent slots processed
             let rpc_client = rpc_client.clone();
             loop {
-                let new_slot = rpc_client
-                    .get_slot_with_commitment(commitment_config)
-                    .await?;
+                let new_slot = match rpc_client.get_slot_with_commitment(commitment_config).await {
+                    Ok(new_slot) => new_slot,
+                    Err(err) => {
+                        warn!("Error while fetching slot {err:?}");
+                        ERRORS_WHILE_FETCHING_SLOTS.inc();
+                        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                        continue;
+                    }
+                };
 
                 if last_latest_slot == new_slot {
+                    warn!("No new slots");
                     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                    println!("no slots");
                     continue;
                 }
 
@@ -358,11 +405,25 @@ impl BlockListener {
                     for slot in new_block_slots {
                         lock.push_back((slot, 0));
                     }
+                    BLOCKS_IN_QUEUE.set(lock.len() as i64);
                 }
 
                 last_latest_slot = new_slot;
+                recent_slot.store(last_latest_slot, std::sync::atomic::Ordering::Relaxed);
                 tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
             }
         })
+    }
+
+    pub fn clean(&self, ttl_duration: Duration) {
+        let length_before = self.signature_subscribers.len();
+        self.signature_subscribers
+            .retain(|_k, (sink, instant)| !sink.is_closed() && instant.elapsed() < ttl_duration);
+
+        NUMBER_OF_SIGNATURE_SUBSCRIBERS.set(self.signature_subscribers.len() as i64);
+        info!(
+            "Cleaned {} Signature Subscribers",
+            length_before - self.signature_subscribers.len()
+        );
     }
 }
