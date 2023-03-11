@@ -39,7 +39,7 @@ pub trait LiteRpc {
         &self,
         signature_strs: Vec<String>,
         config: Option<RpcSignatureStatusConfig>,
-    ) -> Result<RpcResponse<Vec<Option<TransactionStatus>>>>;
+    ) -> Result<LiteResponse<Vec<Option<TransactionStatus>>>>;
 
     #[method(name = "getVersion")]
     fn get_version(&self) -> Result<RpcVersionInfo>;

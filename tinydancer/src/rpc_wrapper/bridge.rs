@@ -248,7 +248,6 @@ impl LiteRpcServer for LiteBridge {
 
         info!("glb {blockhash} {slot} {block_height}");
 
-        
         let sampled =
             pull_and_verify_shreds(slot as usize, String::from("http://0.0.0.0:8899")).await;
 
@@ -312,7 +311,7 @@ impl LiteRpcServer for LiteBridge {
         &self,
         sigs: Vec<String>,
         _config: Option<RpcSignatureStatusConfig>,
-    ) -> crate::rpc_wrapper::rpc::Result<RpcResponse<Vec<Option<TransactionStatus>>>> {
+    ) -> crate::rpc_wrapper::rpc::Result<LiteResponse<Vec<Option<TransactionStatus>>>> {
         RPC_GET_SIGNATURE_STATUSES.inc();
 
         let sig_statuses = sigs
@@ -324,15 +323,18 @@ impl LiteRpcServer for LiteBridge {
                     .and_then(|v| v.status.clone())
             })
             .collect();
-
-        Ok(RpcResponse {
-            context: RpcResponseContext {
-                slot: self
-                    .block_store
-                    .get_latest_block_info(CommitmentConfig::finalized())
-                    .await
-                    .slot,
+        let slot = self
+            .block_store
+            .get_latest_block_info(CommitmentConfig::finalized())
+            .await
+            .slot;
+        let sampled =
+            pull_and_verify_shreds(slot as usize, String::from("http://0.0.0.0:8899")).await;
+        Ok(LiteResponse {
+            context: LiteRpcResponseContext {
+                slot,
                 api_version: None,
+                sampled,
             },
             value: sig_statuses,
         })
