@@ -1,16 +1,26 @@
-use crate::rpc_wrapper::{
-    block_store::{BlockInformation, BlockStore},
-    configs::{IsBlockHashValidConfig, SendTransactionConfig},
-    encoding::BinaryEncoding,
-    rpc::LiteRpcServer,
-    tpu_manager::TpuManager,
-    workers::{BlockListener, Cleaner, TxSender, WireTransaction},
+use crate::{
+    rpc_wrapper::{
+        block_store::{BlockInformation, BlockStore},
+        configs::{IsBlockHashValidConfig, SendTransactionConfig},
+        encoding::BinaryEncoding,
+        rpc::LiteRpcServer,
+        tpu_manager::TpuManager,
+        workers::{BlockListener, Cleaner, TxSender, WireTransaction},
+    },
+    sampler::{get_serialized, pull_and_verify_shreds, SHRED_CF},
 };
-
-use std::{ops::Deref, str::FromStr, sync::Arc, time::Duration};
+use serde::{self, Deserialize, Serialize};
+use solana_client::rpc_response::RpcApiVersion;
+use std::{
+    ops::{Deref, Sub},
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::bail;
 
+use solana_ledger::shred::{Shred, ShredType, Slot};
 use tiny_logger::logs::{info, warn};
 
 use jsonrpsee::{server::ServerBuilder, types::SubscriptionResult, SubscriptionSink};
@@ -22,8 +32,8 @@ use solana_rpc_client_api::{
     response::{Response as RpcResponse, RpcBlockhash, RpcResponseContext, RpcVersionInfo},
 };
 use solana_sdk::{
-    commitment_config::CommitmentConfig, hash::Hash, pubkey::Pubkey, signature::Keypair,
-    transaction::VersionedTransaction,
+    blake3::hashv, commitment_config::CommitmentConfig, hash::Hash, pubkey::Pubkey,
+    signature::Keypair, transaction::VersionedTransaction,
 };
 use solana_transaction_status::TransactionStatus;
 use tokio::{
@@ -54,6 +64,7 @@ lazy_static::lazy_static! {
 pub struct LiteBridge {
     pub rpc_client: Arc<RpcClient>,
     pub tpu_manager: Arc<TpuManager>,
+    pub db_instance: Arc<rocksdb::DB>,
     // None if LiteBridge is not executed
     pub tx_send_channel: Option<UnboundedSender<(String, WireTransaction, u64)>>,
     pub tx_sender: TxSender,
@@ -67,6 +78,7 @@ impl LiteBridge {
         ws_addr: String,
         fanout_slots: u64,
         identity: Keypair,
+        db_instance: Arc<rocksdb::DB>,
     ) -> anyhow::Result<Self> {
         let rpc_client = Arc::new(RpcClient::new(rpc_url.clone()));
 
@@ -81,6 +93,7 @@ impl LiteBridge {
             BlockListener::new(rpc_client.clone(), tx_sender.clone(), block_store.clone());
 
         Ok(Self {
+            db_instance,
             rpc_client,
             tpu_manager,
             tx_send_channel: None,
@@ -219,7 +232,7 @@ impl LiteRpcServer for LiteBridge {
     async fn get_latest_blockhash(
         &self,
         config: Option<RpcContextConfig>,
-    ) -> crate::rpc_wrapper::rpc::Result<RpcResponse<RpcBlockhash>> {
+    ) -> crate::rpc_wrapper::rpc::Result<LiteResponse<RpcBlockhash>> {
         RPC_GET_LATEST_BLOCKHASH.inc();
 
         let commitment_config = config
@@ -235,10 +248,15 @@ impl LiteRpcServer for LiteBridge {
 
         info!("glb {blockhash} {slot} {block_height}");
 
-        Ok(RpcResponse {
-            context: RpcResponseContext {
+        
+        let sampled =
+            pull_and_verify_shreds(slot as usize, String::from("http://0.0.0.0:8899")).await;
+
+        Ok(LiteResponse {
+            context: LiteRpcResponseContext {
                 slot,
                 api_version: None,
+                sampled,
             },
             value: RpcBlockhash {
                 blockhash,
@@ -384,4 +402,18 @@ impl Deref for LiteBridge {
     fn deref(&self) -> &Self::Target {
         &self.rpc_client
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiteRpcResponseContext {
+    pub slot: Slot,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_version: Option<RpcApiVersion>,
+    pub sampled: bool,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiteResponse<T> {
+    pub context: LiteRpcResponseContext,
+    pub value: T,
 }

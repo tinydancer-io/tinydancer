@@ -8,6 +8,8 @@ use solana_transaction_status::TransactionStatus;
 
 use crate::rpc_wrapper::configs::{IsBlockHashValidConfig, SendTransactionConfig};
 
+use super::bridge::LiteResponse;
+
 pub type Result<T> = std::result::Result<T, jsonrpsee::core::Error>;
 
 #[rpc(server)]
@@ -23,7 +25,7 @@ pub trait LiteRpc {
     async fn get_latest_blockhash(
         &self,
         config: Option<RpcContextConfig>,
-    ) -> Result<RpcResponse<RpcBlockhash>>;
+    ) -> Result<LiteResponse<RpcBlockhash>>;
 
     #[method(name = "isBlockhashValid")]
     async fn is_blockhash_valid(

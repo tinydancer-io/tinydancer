@@ -43,7 +43,7 @@ use tokio::{
 };
 use tungstenite::{connect, Message};
 use url::Url;
-const SHRED_CF: &'static str = &"archived_shreds";
+pub const SHRED_CF: &'static str = &"archived_shreds";
 pub struct SampleService {
     sample_indices: Vec<u64>,
     // peers: Vec<(Pubkey, SocketAddr)>,
@@ -52,6 +52,7 @@ pub struct SampleService {
 pub struct SampleServiceConfig {
     pub cluster: Cluster,
     pub archive_config: Option<ArchiveConfig>,
+    pub instance: Arc<rocksdb::DB>,
 }
 
 #[derive(Clone, Debug)]
@@ -84,6 +85,7 @@ impl ClientService<SampleServiceConfig> for SampleService {
                 threads.push(tokio::spawn(shred_archiver(
                     verified_shred_rx,
                     archive_config.clone(),
+                    config.instance,
                 )));
             }
             for thread in threads {
@@ -193,7 +195,8 @@ async fn shred_update_loop(
                     println!("max_shreds_per_slot {:?}", max_shreds_per_slot);
 
                     if let Some(max_shreds_per_slot) = max_shreds_per_slot {
-                        let indices = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
+                        let mut indices = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
+                        indices.push(0 as usize);
                         Some(indices)
                     } else {
                         None
@@ -205,7 +208,7 @@ async fn shred_update_loop(
                     None
                 }
             };
-            println!("indices of: {:?}", shred_indices_for_slot);
+            println!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
             if let Some(shred_indices_for_slot) = shred_indices_for_slot.clone() {
                 let shreds_for_slot = request_shreds(
                     slot as usize,
@@ -330,6 +333,7 @@ pub async fn shred_verify_loop(
 pub async fn shred_archiver(
     verified_shred_rx: Receiver<(Shred, solana_ledger::shred::Pubkey)>,
     archive_config: ArchiveConfig,
+    instance: Arc<rocksdb::DB>,
 ) {
     loop {
         if let Ok((verified_shred, leader)) = verified_shred_rx.recv() {
@@ -338,19 +342,25 @@ pub async fn shred_archiver(
             opts.set_error_if_exists(false);
             opts.create_missing_column_families(true);
 
-            let key = verified_shred.id().seed(&leader);
+            let key = hashv(&[
+                &verified_shred.slot().to_le_bytes(),
+                &u8::from(verified_shred.shred_type()).to_le_bytes(),
+                &verified_shred.index().to_le_bytes(),
+            ])
+            .to_bytes();
+            // println!("archiver {:?}", verified_shred.slot(),);
             // let cfs =
             //     rocksdb::DB::list_cf(&opts, archive_config.archive_path.clone()).unwrap_or(vec![]);
             // let shred_cf = cfs.clone().into_iter().find(|cf| cf.as_str() == SHRED_CF);
-            let instance =
-                DB::open_cf(&opts, archive_config.archive_path.clone(), vec![SHRED_CF]).unwrap();
+            // let instance =
+            //     DB::open_cf(&opts, archive_config.archive_path.clone(), vec![SHRED_CF]).unwrap();
             // match shred_cf {
             //     Some(cf_name) => {
             let cf = instance.cf_handle(SHRED_CF).unwrap();
             let put_response = put_serialized(&instance, cf, key, &verified_shred);
             match put_response {
                 Ok(_) => info!("Saved Shred {:?} to db", verified_shred.id().seed(&leader)),
-                Err(e) => error!("{:?}", e),
+                Err(e) => println!("{:?}", e),
             }
             //     }
             //     None => instance
@@ -360,8 +370,120 @@ pub async fn shred_archiver(
         }
     }
 }
+pub async fn pull_and_verify_shreds(slot: usize, endpoint: String) -> bool {
+    let shred_for_one = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
+    // println!("res {:?}", shred_for_one);
+    let shred_indices_for_slot = match shred_for_one {
+        Ok(first_shred) => {
+            let first_shred = &first_shred.result.shreds[1].clone(); // add some check later
 
-fn put_serialized<T: serde::Serialize + std::fmt::Debug>(
+            let max_shreds_per_slot = if let Some(first_shred) = first_shred {
+                match (
+                    first_shred.clone().shred_data,
+                    first_shred.clone().shred_code,
+                ) {
+                    (Some(data_shred), None) => {
+                        Some(
+                            Shred::ShredData(data_shred)
+                                .num_data_shreds()
+                                .expect("num data shreds error"),
+                        )
+                        // Some(data_shred. ().expect("num data shreds error"))
+                    }
+                    (None, Some(coding_shred)) => Some(
+                        Shred::ShredCode(coding_shred)
+                            .num_coding_shreds()
+                            .expect("num code shreds error"),
+                    ),
+                    _ => None,
+                }
+            } else {
+                println!("shred: {:?}", first_shred);
+                None
+            };
+            println!("max_shreds_per_slot {:?}", max_shreds_per_slot);
+
+            if let Some(max_shreds_per_slot) = max_shreds_per_slot {
+                let mut indices = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
+                indices.push(0 as usize);
+                Some(indices)
+            } else {
+                None
+            }
+        }
+        Err(_) => {
+            //@TODO: add logger here
+
+            None
+        }
+    };
+    println!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
+    if let Some(shred_indices_for_slot) = shred_indices_for_slot.clone() {
+        let shreds_for_slot = request_shreds(
+            slot as usize,
+            shred_indices_for_slot.clone(),
+            endpoint.clone(),
+        )
+        .await;
+        // println!("made 2nd req: {:?}", shreds_for_slot);
+        if let Ok(shreds_for_slot) = shreds_for_slot {
+            println!("get shred for slot in 2nd req");
+            let mut shreds: Vec<Option<Shred>> = shreds_for_slot
+                .result
+                .shreds
+                .par_iter()
+                .map(|s| try_coerce_shred!(s))
+                .collect();
+            // println!("before leader");
+            let leader =
+                solana_ledger::shred::Pubkey::from_str(shreds_for_slot.result.leader.as_str())
+                    .unwrap();
+            // println!("leader {:?}", leader);
+            let mut fullfill_count = AtomicU32::new(0u32);
+            shreds.dedup();
+            shreds.iter().for_each(|f| {
+                if let Some(s) = f {
+                    info!("{:?}", s.index());
+                }
+            });
+            shreds.par_iter().for_each(|s| {
+                if let Some(s) = s {
+                    match shred_indices_for_slot.contains(&(s.index() as usize)) {
+                        true => {
+                            fullfill_count.fetch_add(1, Ordering::Relaxed);
+                            info!(
+                                "Received requested shred: {:?} for slot: {:?}",
+                                s.index(),
+                                s.slot()
+                            )
+                        }
+                        false => info!(
+                            "Received unrequested shred index: {:?} for slot: {:?}",
+                            s.index(),
+                            s.slot()
+                        ),
+                    }
+                } else {
+                    info!("Received empty")
+                }
+            });
+            if (fullfill_count.get_mut().to_owned() as usize) < shred_indices_for_slot.len() {
+                info!("Received incomplete number of shreds, requested {:?} shreds for slot {:?} and received {:?}", shred_indices_for_slot.len(),slot, fullfill_count);
+            }
+            let sampled = shreds
+                .par_iter()
+                .flatten()
+                .all(|s| verify_sample(s, leader));
+            println!("pull and verify {:?}", sampled);
+            sampled
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}
+pub fn put_serialized<T: serde::Serialize + std::fmt::Debug>(
     instance: &rocksdb::DB,
     cf: &ColumnFamily,
     key: [u8; 32],
@@ -377,7 +499,7 @@ fn put_serialized<T: serde::Serialize + std::fmt::Debug>(
         )),
     }
 }
-fn get_serialized<T: DeserializeOwned>(
+pub fn get_serialized<T: DeserializeOwned>(
     instance: &rocksdb::DB,
     cf: &ColumnFamily,
     key: [u8; 32],
@@ -449,28 +571,33 @@ mod tests {
     use super::{get_serialized, SHRED_CF};
     use rocksdb::{Options as RocksOptions, DB};
     use solana_client::nonblocking::rpc_client::RpcClient;
-    use solana_ledger::shred::{Shred, Signer};
+    use solana_ledger::shred::{hashv, Shred, ShredType, Signer};
     use solana_sdk::signer::keypair::Keypair;
-    #[ignore]
+
     #[test]
     fn get_shred_from_db() {
         let mut opts = RocksOptions::default();
         opts.create_if_missing(true);
         opts.set_error_if_exists(false);
         opts.create_missing_column_families(true);
-        let instance = DB::open_cf(&opts, "/tmp/shreds/", vec![SHRED_CF]).unwrap();
-        let key = [
-            179, 203, 143, 155, 146, 22, 141, 66, 47, 238, 138, 131, 65, 241, 171, 101, 183, 115,
-            178, 42, 248, 125, 178, 220, 242, 2, 204, 167, 239, 159, 88, 224,
-        ];
+        let instance = DB::open_cf(&opts, "/tmp", vec![SHRED_CF]).unwrap();
+        let slot: u64 = 1963754;
+        let index: u32 = 11;
+        let key = hashv(&[
+            &slot.to_le_bytes(),
+            &u8::from(ShredType::Data).to_le_bytes(),
+            &u32::from(0 as u32).to_le_bytes(), // can be random
+        ])
+        .to_bytes();
         let cf = instance.cf_handle(SHRED_CF).unwrap();
         let shred = get_serialized::<Shred>(&instance, cf, key);
+        println!("shred {:?}", shred);
         assert!(
             shred.is_ok(),
             "error retrieving and serializing shred from db"
         );
     }
-
+    #[ignore]
     #[tokio::test]
     async fn call_lite_rpc() {
         let rpc_client = RpcClient::new("http://0.0.0.0:8890".to_string());

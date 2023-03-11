@@ -17,6 +17,7 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_ledger::shred::Signer;
 use solana_sdk::signer::keypair::Keypair;
 use solana_transaction_status::TransactionConfirmationStatus;
+use std::sync::Arc;
 use std::{env, time::Duration};
 use tiny_logger::logs::info;
 use tokio::task::JoinHandle;
@@ -50,6 +51,7 @@ pub struct TransactionService {
 
 pub struct TransactionServiceConfig {
     pub cluster: Cluster,
+    pub db_instance: Arc<rocksdb::DB>,
 }
 
 async fn get_identity_keypair(identity_from_cli: &String) -> Keypair {
@@ -111,6 +113,7 @@ impl ClientService<TransactionServiceConfig> for TransactionService {
                 String::from(DEFAULT_WS_ADDR),
                 DEFAULT_FANOUT_SIZE,
                 payer,
+                config.db_instance,
             )
             .await?;
 
