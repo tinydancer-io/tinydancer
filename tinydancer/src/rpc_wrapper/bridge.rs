@@ -9,6 +9,8 @@ use crate::{
     },
     sampler::{get_serialized, pull_and_verify_shreds, SHRED_CF},
 };
+use hyper::Method;
+use reqwest::header;
 use serde::{self, Deserialize, Serialize};
 use solana_client::rpc_response::RpcApiVersion;
 use std::{
@@ -24,7 +26,6 @@ use solana_ledger::shred::{Shred, ShredType, Slot};
 use tiny_logger::logs::{info, warn};
 
 use jsonrpsee::{server::ServerBuilder, types::SubscriptionResult, SubscriptionSink};
-
 use prometheus::{core::GenericGauge, opts, register_int_counter, register_int_gauge, IntCounter};
 use solana_rpc_client::{nonblocking::rpc_client::RpcClient, rpc_client::SerializableTransaction};
 use solana_rpc_client_api::{
@@ -41,6 +42,7 @@ use tokio::{
     sync::mpsc::{self, UnboundedSender},
     task::JoinHandle,
 };
+use tower_http::cors::{Any, CorsLayer};
 
 lazy_static::lazy_static! {
     static ref RPC_SEND_TX: IntCounter =
@@ -147,9 +149,20 @@ impl LiteBridge {
                 .build(ws_addr.clone())
                 .await?
                 .start(rpc.clone())?;
-
+            let cors = CorsLayer::new()
+                .allow_methods([Method::POST, Method::GET])
+                .allow_origin(Any)
+                .allow_headers([
+                    header::CONTENT_TYPE,
+                    header::ACCESS_CONTROL_ALLOW_HEADERS,
+                    header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                    header::ACCESS_CONTROL_ALLOW_METHODS,
+                ]);
+            let middleware = tower::ServiceBuilder::new().layer(cors);
             let http_server_handle = ServerBuilder::default()
                 .http_only()
+                .set_middleware(middleware)
+                .set_host_filtering(jsonrpsee::server::AllowHosts::Any)
                 .build(http_addr.clone())
                 .await?
                 .start(rpc)?;

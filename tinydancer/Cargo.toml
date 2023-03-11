@@ -51,6 +51,9 @@ tiny-logger={path="../logger"}
 solana-metrics="1.15.0"
 solana-measure = "1.15.0"
 clap = { version = "4.1.1", features = ["derive", "env"] }
+tower-http = { version = "0.4.0", features = ["full"] }
+hyper = "0.14.25"
+tower = "0.4.13"
 
 [dependencies.rocksdb]
 version = "0.19.0"
