@@ -54,7 +54,7 @@ pub struct SampleServiceConfig {
     pub archive_config: Option<ArchiveConfig>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ArchiveConfig {
     pub shred_archive_duration: u64,
 
@@ -78,6 +78,7 @@ impl ClientService<SampleServiceConfig> for SampleService {
                 rpc_url,
                 shred_tx,
             )));
+            // panic!("{:?}", config.archive_config);
             threads.push(tokio::spawn(shred_verify_loop(shred_rx, verified_shred_tx)));
             if let Some(archive_config) = config.archive_config {
                 threads.push(tokio::spawn(shred_archiver(
@@ -445,17 +446,19 @@ pub struct RpcShred {
 
 #[cfg(test)]
 mod tests {
-    use rocksdb::{Options as RocksOptions, DB};
-    use solana_ledger::shred::Shred;
-
     use super::{get_serialized, SHRED_CF};
+    use rocksdb::{Options as RocksOptions, DB};
+    use solana_client::nonblocking::rpc_client::RpcClient;
+    use solana_ledger::shred::{Shred, Signer};
+    use solana_sdk::signer::keypair::Keypair;
+    #[ignore]
     #[test]
     fn get_shred_from_db() {
         let mut opts = RocksOptions::default();
         opts.create_if_missing(true);
         opts.set_error_if_exists(false);
         opts.create_missing_column_families(true);
-        let instance = DB::open_cf(&opts, "tmp/shreds/", vec![SHRED_CF]).unwrap();
+        let instance = DB::open_cf(&opts, "/tmp/shreds/", vec![SHRED_CF]).unwrap();
         let key = [
             179, 203, 143, 155, 146, 22, 141, 66, 47, 238, 138, 131, 65, 241, 171, 101, 183, 115,
             178, 42, 248, 125, 178, 220, 242, 2, 204, 167, 239, 159, 88, 224,
@@ -466,5 +469,19 @@ mod tests {
             shred.is_ok(),
             "error retrieving and serializing shred from db"
         );
+    }
+
+    #[tokio::test]
+    async fn call_lite_rpc() {
+        let rpc_client = RpcClient::new("http://0.0.0.0:8890".to_string());
+
+        //let identity = get_identity_keypair(&identity_keypair).await;
+        // let blockhash = rpc_client.get_latest_blockhash().await.unwrap();
+        let payer = Keypair::new();
+        let airdrop_sign = rpc_client
+            .request_airdrop(&payer.try_pubkey().unwrap(), 2000000000)
+            .await
+            .unwrap();
+        print!("AIRDROP CONFIRMED:{}", airdrop_sign);
     }
 }

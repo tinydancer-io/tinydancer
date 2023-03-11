@@ -1,25 +1,25 @@
-pub mod rpc;
-pub mod configs;
-pub mod tpu_manager;
-pub mod encoding;
 pub mod bridge;
+pub mod configs;
+pub mod encoding;
+pub mod rpc;
+pub mod tpu_manager;
 pub mod workers;
 // pub mod cli;
 pub mod block_store;
 use crate::rpc_wrapper::bridge::LiteBridge;
-use std::{time::Duration, env};
+use crate::tinydancer::{ClientService, Cluster};
 use anyhow::bail;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_ledger::shred::Signer;
-use tiny_logger::logs::info;
-use solana_sdk::signer::keypair::Keypair;
 use async_trait::async_trait;
 use clap::Parser;
 use const_env::from_env;
-use solana_transaction_status::TransactionConfirmationStatus;
-use tokio::task::JoinHandle;
 use dotenv::dotenv;
-use crate::tinydancer::{Cluster, ClientService};
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_ledger::shred::Signer;
+use solana_sdk::signer::keypair::Keypair;
+use solana_transaction_status::TransactionConfirmationStatus;
+use std::{env, time::Duration};
+use tiny_logger::logs::info;
+use tokio::task::JoinHandle;
 
 // use self::cli::Args;
 
@@ -44,14 +44,13 @@ pub const DEFAULT_TX_SENT_TTL_S: u64 = 12;
 pub const DEFAULT_TRANSACTION_CONFIRMATION_STATUS: TransactionConfirmationStatus =
     TransactionConfirmationStatus::Finalized;
 
-pub struct TransactionService{
+pub struct TransactionService {
     tx_handle: JoinHandle<Result<(), anyhow::Error>>,
 }
 
 pub struct TransactionServiceConfig {
     pub cluster: Cluster,
 }
-
 
 async fn get_identity_keypair(identity_from_cli: &String) -> Keypair {
     if let Some(identity_env_var) = env::var("IDENTITY").ok() {
@@ -78,10 +77,10 @@ async fn get_identity_keypair(identity_from_cli: &String) -> Keypair {
 }
 
 #[async_trait]
-impl ClientService<TransactionServiceConfig> for TransactionService{
+impl ClientService<TransactionServiceConfig> for TransactionService {
     type ServiceError = tokio::io::Error;
-   fn new(config: TransactionServiceConfig) -> Self{
-        let transaction_handle = tokio::spawn( async {
+    fn new(config: TransactionServiceConfig) -> Self {
+        let transaction_handle = tokio::spawn(async {
             // let Args {
             //     rpc_addr,
             //     ws_addr,
@@ -94,47 +93,56 @@ impl ClientService<TransactionServiceConfig> for TransactionService{
             //     identity_keypair,
             // } = Args::parse();
 
-        dotenv().ok();
-        let rpc_client = RpcClient::new(DEFAULT_RPC_ADDR.to_string());
+            dotenv().ok();
+            let rpc_client = RpcClient::new(DEFAULT_RPC_ADDR.to_string());
 
-        //let identity = get_identity_keypair(&identity_keypair).await;
-       // let blockhash = rpc_client.get_latest_blockhash().await.unwrap();
-        let payer = Keypair::new();
-        let airdrop_sign = rpc_client.request_airdrop(&payer.try_pubkey().unwrap(), 2000000000).await?;
-        print!("AIRDROP CONFIRMED:{}", airdrop_sign);
-        let tx_batch_interval_ms = Duration::from_millis(DEFAULT_TX_BATCH_INTERVAL_MS);
-        let clean_interval_ms = Duration::from_millis(DEFAULT_CLEAN_INTERVAL_MS);
+            //let identity = get_identity_keypair(&identity_keypair).await;
+            // let blockhash = rpc_client.get_latest_blockhash().await.unwrap();
+            let payer = Keypair::new();
+            let airdrop_sign = rpc_client
+                .request_airdrop(&payer.try_pubkey().unwrap(), 2000000000)
+                .await?;
+            print!("AIRDROP CONFIRMED:{}", airdrop_sign);
+            let tx_batch_interval_ms = Duration::from_millis(DEFAULT_TX_BATCH_INTERVAL_MS);
+            let clean_interval_ms = Duration::from_millis(DEFAULT_CLEAN_INTERVAL_MS);
 
-        let light_bridge = LiteBridge::new(String::from(DEFAULT_RPC_ADDR), String::from(DEFAULT_WS_ADDR), DEFAULT_FANOUT_SIZE, payer).await?;
-
-        let services = light_bridge
-            .start_services(
-                String::from("[::]:8890"),
-                String::from("[::]:8891"),
-                DEFAULT_TX_BATCH_SIZE,
-                tx_batch_interval_ms,
-                clean_interval_ms,
+            let light_bridge = LiteBridge::new(
+                String::from(DEFAULT_RPC_ADDR),
+                String::from(DEFAULT_WS_ADDR),
+                DEFAULT_FANOUT_SIZE,
+                payer,
             )
             .await?;
 
-        let services = futures::future::try_join_all(services);
+            let services = light_bridge
+                .start_services(
+                    String::from("[::]:8890"),
+                    String::from("[::]:8891"),
+                    DEFAULT_TX_BATCH_SIZE,
+                    tx_batch_interval_ms,
+                    clean_interval_ms,
+                )
+                .await?;
 
-        let ctrl_c_signal = tokio::signal::ctrl_c();
+            let services = futures::future::try_join_all(services);
 
-        tokio::select! {
-            _ = services => {
-                bail!("Services quit unexpectedly");
+            let ctrl_c_signal = tokio::signal::ctrl_c();
+
+            tokio::select! {
+                _ = services => {
+                    bail!("Services quit unexpectedly");
+                }
+                _ = ctrl_c_signal => {
+                    info!("Received ctrl+c signal");
+                    Ok(())
+                }
             }
-            _ = ctrl_c_signal => {
-                info!("Received ctrl+c signal");
-                Ok(())
-            }
-        }});
+        });
         Self {
-            tx_handle: transaction_handle
+            tx_handle: transaction_handle,
         }
     }
-   async fn join(self) -> std::result::Result<(), Self::ServiceError> {
+    async fn join(self) -> std::result::Result<(), Self::ServiceError> {
         let _ = self.tx_handle.await;
         Ok(())
     }

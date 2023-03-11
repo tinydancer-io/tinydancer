@@ -4,9 +4,7 @@ use crate::rpc_wrapper::{
     encoding::BinaryEncoding,
     rpc::LiteRpcServer,
     tpu_manager::TpuManager,
-    workers::{
-        BlockListener, Cleaner, TxSender, WireTransaction,
-    },
+    workers::{BlockListener, Cleaner, TxSender, WireTransaction},
 };
 
 use std::{ops::Deref, str::FromStr, sync::Arc, time::Duration};
@@ -102,15 +100,13 @@ impl LiteBridge {
         tx_send_interval: Duration,
         clean_interval: Duration,
     ) -> anyhow::Result<Vec<JoinHandle<anyhow::Result<()>>>> {
-
         let (tx_send, tx_recv) = mpsc::unbounded_channel();
         self.tx_send_channel = Some(tx_send);
 
-        let tx_sender = self.tx_sender.clone().execute(
-            tx_recv,
-            tx_batch_size,
-            tx_send_interval,
-        );
+        let tx_sender = self
+            .tx_sender
+            .clone()
+            .execute(tx_recv, tx_batch_size, tx_send_interval);
 
         let finalized_block_listener = self
             .block_listner
@@ -341,14 +337,14 @@ impl LiteRpcServer for LiteBridge {
         config: Option<RpcRequestAirdropConfig>,
     ) -> crate::rpc_wrapper::rpc::Result<String> {
         RPC_REQUEST_AIRDROP.inc();
-
+        // panic!("HERE!!!!!!!!");
         let pubkey = match Pubkey::from_str(&pubkey_str) {
             Ok(pubkey) => pubkey,
             Err(err) => {
                 return Err(jsonrpsee::core::Error::Custom(err.to_string()));
             }
         };
-
+        // panic!("HERE!!!!!!!! {:?}", pubkey);
         let airdrop_sig = match self
             .rpc_client
             .request_airdrop_with_config(&pubkey, lamports, config.unwrap_or_default())
@@ -356,6 +352,7 @@ impl LiteRpcServer for LiteBridge {
         {
             Ok(airdrop_sig) => airdrop_sig.to_string(),
             Err(err) => {
+                // println!("ERROR!!!!!!!! {:?}", err);
                 return Err(jsonrpsee::core::Error::Custom(err.to_string()));
             }
         };
