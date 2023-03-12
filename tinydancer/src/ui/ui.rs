@@ -112,6 +112,8 @@ impl TabsState {
 }
 pub struct UiConfig {
     pub client_status: Arc<Mutex<ClientStatus>>,
+    pub enable_ui_service: bool,
+    pub tui_monitor: bool,
 }
 // main draw function
 pub fn draw<B: Backend>(f: &mut Frame<B>) {
@@ -209,58 +211,63 @@ impl ClientService<UiConfig> for UiService {
         let ui_service_handle = std::thread::spawn(move || loop {
             let mut threads = Vec::default();
 
-            threads.push(std::thread::spawn(|| {
-                info!("rendering ui");
-                std::thread::sleep(std::time::Duration::from_secs(2));
-            }));
+            if config.enable_ui_service {
+                threads.push(std::thread::spawn(|| {
+                    info!("rendering ui");
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                }));
+            }
 
-            let client_status = config.client_status.clone();
-            let mut spinner =
-                Spinner::new(spinners::Dots, "Initializing Client...", SpinColor::Yellow);
+            if config.tui_monitor {
+                let client_status = config.client_status.clone();
+                let mut spinner =
+                    Spinner::new(spinners::Dots, "Initializing Client...", SpinColor::Yellow);
 
-            threads.push(std::thread::spawn(move || loop {
-                sleep(Duration::from_secs(1));
+                threads.push(std::thread::spawn(move || loop {
+                    sleep(Duration::from_secs(1));
 
-                let status = client_status.lock().unwrap();
-                match &*status {
-                    ClientStatus::Active(msg) => {
-                        spinner.update(spinners::Dots, msg.clone(), SpinColor::Green);
-                        // sleep(Duration::from_secs(100));
+                    let status = client_status.lock().unwrap();
+                    match &*status {
+                        ClientStatus::Active(msg) => {
+                            spinner.update(spinners::Dots, msg.clone(), SpinColor::Green);
+                            // sleep(Duration::from_secs(100));
+                        }
+                        ClientStatus::Initializing(msg) => {
+                            spinner.update(spinners::Dots, msg.clone(), SpinColor::Yellow);
+                        }
+                        ClientStatus::Crashed(msg) => {
+                            spinner.update(spinners::Dots, msg.clone(), SpinColor::Red);
+                        }
+                        ClientStatus::ShuttingDown(msg) => {
+                            spinner.update(spinners::Dots, msg.clone(), SpinColor::White);
+                            sleep(Duration::from_millis(500));
+                            std::process::exit(0);
+                        }
+                        _ => {}
                     }
-                    ClientStatus::Initializing(msg) => {
-                        spinner.update(spinners::Dots, msg.clone(), SpinColor::Yellow);
-                    }
-                    ClientStatus::Crashed(msg) => {
-                        spinner.update(spinners::Dots, msg.clone(), SpinColor::Red);
-                    }
-                    ClientStatus::ShuttingDown(msg) => {
-                        spinner.update(spinners::Dots, msg.clone(), SpinColor::White);
-                        sleep(Duration::from_millis(500));
-                        std::process::exit(0);
-                    }
-                    _ => {}
-                }
-                Mutex::unlock(status);
-                enable_raw_mode();
-                if crossterm::event::poll(Duration::from_millis(100)).unwrap() {
-                    let ev = crossterm::event::read().unwrap();
+                    Mutex::unlock(status);
+                    enable_raw_mode();
+                    if crossterm::event::poll(Duration::from_millis(100)).unwrap() {
+                        let ev = crossterm::event::read().unwrap();
 
-                    if ev
-                        == Event::Key(KeyEvent {
-                            code: KeyCode::Char('c'),
-                            modifiers: KeyModifiers::CONTROL,
-                            kind: KeyEventKind::Press,
-                            state: KeyEventState::NONE,
-                        })
-                    {
-                        let mut status = client_status.lock().unwrap();
-                        *status =
-                            ClientStatus::ShuttingDown(String::from("Shutting Down Gracefully..."));
-                        Mutex::unlock(status);
-                        disable_raw_mode();
+                        if ev
+                            == Event::Key(KeyEvent {
+                                code: KeyCode::Char('c'),
+                                modifiers: KeyModifiers::CONTROL,
+                                kind: KeyEventKind::Press,
+                                state: KeyEventState::NONE,
+                            })
+                        {
+                            let mut status = client_status.lock().unwrap();
+                            *status = ClientStatus::ShuttingDown(String::from(
+                                "Shutting Down Gracefully...",
+                            ));
+                            Mutex::unlock(status);
+                            disable_raw_mode();
+                        }
                     }
-                }
-            }));
+                }));
+            }
 
             for handle in threads {
                 handle.join();

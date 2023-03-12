@@ -42,6 +42,7 @@ pub struct TinyDancerConfig {
     pub sample_qty: u64,
     pub enable_ui_service: bool,
     pub archive_config: Option<ArchiveConfig>,
+    pub tui_monitor: bool,
 }
 
 use solana_metrics::datapoint_info;
@@ -84,6 +85,7 @@ impl TinyDancer {
             enable_ui_service,
             rpc_endpoint,
             sample_qty,
+            tui_monitor,
             archive_config,
         } = config.clone();
         let rpc_cluster = rpc_endpoint.clone();
@@ -114,10 +116,21 @@ impl TinyDancer {
             db_instance: rpc_instance,
         });
         let ui_service = if enable_ui_service {
-            Some(UiService::new(UiConfig { client_status }))
+            Some(UiService::new(UiConfig {
+                client_status,
+                enable_ui_service,
+                tui_monitor,
+            }))
+        } else if tui_monitor {
+            Some(UiService::new(UiConfig {
+                client_status,
+                enable_ui_service,
+                tui_monitor,
+            }))
         } else {
             None
         };
+
         Self {
             config,
             ui_service,
