@@ -1,4 +1,4 @@
-use crate::tinydancer::{endpoint, ClientService, Cluster};
+use crate::tinydancer::{endpoint, ClientService, ClientStatus, Cluster};
 use crate::{convert_to_websocket, send_rpc_call, try_coerce_shred};
 use async_trait::async_trait;
 use crossbeam::channel::{Receiver, Sender};
@@ -30,7 +30,7 @@ use solana_sdk::{
 };
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::{error::Error, ops::Add};
 use std::{
     net::{SocketAddr, UdpSocket},
@@ -53,6 +53,7 @@ pub struct SampleServiceConfig {
     pub cluster: Cluster,
     pub archive_config: Option<ArchiveConfig>,
     pub instance: Arc<rocksdb::DB>,
+    pub status_sampler: Arc<Mutex<ClientStatus>>,
 }
 
 #[derive(Clone, Debug)]
@@ -65,7 +66,7 @@ pub struct ArchiveConfig {
 impl ClientService<SampleServiceConfig> for SampleService {
     type ServiceError = tokio::task::JoinError;
     fn new(config: SampleServiceConfig) -> Self {
-        let sampler_handle = tokio::spawn(async {
+        let sampler_handle = tokio::spawn(async move {
             let rpc_url = endpoint(config.cluster);
             let pub_sub = convert_to_websocket!(rpc_url);
             let mut threads = Vec::default();
@@ -73,13 +74,19 @@ impl ClientService<SampleServiceConfig> for SampleService {
             let (slot_update_tx, slot_update_rx) = crossbeam::channel::unbounded::<u64>();
             let (shred_tx, shred_rx) = crossbeam::channel::unbounded();
             let (verified_shred_tx, verified_shred_rx) = crossbeam::channel::unbounded();
-            threads.push(tokio::spawn(slot_update_loop(slot_update_tx, pub_sub)));
+            let status_arc = Arc::clone(&config.status_sampler);
+            threads.push(tokio::spawn(slot_update_loop(
+                slot_update_tx,
+                pub_sub,
+                config.status_sampler,
+            )));
             threads.push(tokio::spawn(shred_update_loop(
                 slot_update_rx,
                 rpc_url,
                 shred_tx,
+                status_arc,
             )));
-            // panic!("{:?}", config.archive_config);
+
             threads.push(tokio::spawn(shred_verify_loop(shred_rx, verified_shred_tx)));
             if let Some(archive_config) = config.archive_config {
                 threads.push(tokio::spawn(shred_archiver(
@@ -120,38 +127,60 @@ pub async fn request_shreds(
         }]}) // getting one shred just to get max shreds per slot, can maybe randomize the selection here
         .to_string();
     let res = send_rpc_call!(endpoint, request);
-    // println!("why not result {:?}", res);
+    // info!("{:?}", res);
     serde_json::from_str::<GetShredResponse>(res.to_string().as_str())
 }
 
-async fn slot_update_loop(slot_update_tx: Sender<u64>, pub_sub: String) {
-    let (mut socket, _response) =
-        connect(Url::parse(pub_sub.as_str()).unwrap()).expect("Can't connect to websocket");
-    socket
-        .write_message(Message::Text(
-            r#"{ "jsonrpc": "2.0", "id": 1, "method": "slotSubscribe" }"#.into(),
-        ))
-        .unwrap();
+async fn slot_update_loop(
+    slot_update_tx: Sender<u64>,
+    pub_sub: String,
+    status_sampler: Arc<Mutex<ClientStatus>>,
+) {
+    let connection = match connect(Url::parse(pub_sub.as_str()).unwrap()) {
+        Ok((socket, _response)) => Some((socket, _response)),
+        Err(_) => {
+            let mut status = status_sampler.lock().unwrap();
+            *status = ClientStatus::Crashed(String::from("Client can't connect to socket"));
 
-    loop {
-        match socket.read_message() {
-            Ok(msg) => {
-                let res = serde_json::from_str::<SlotSubscribeResponse>(msg.to_string().as_str());
-                // println!("res: {:?}", msg.to_string().as_str());
-                if let Ok(res) = res {
-                    match slot_update_tx.send(res.params.result.root as u64) {
-                        Ok(_) => {
-                            println!("slot updated: {:?}", res.params.result.root);
-                        }
-                        Err(e) => {
-                            println!("error here: {:?} {:?}", e, res.params.result.root as u64);
-                            continue; // @TODO: we should add retries here incase send fails for some reason
+            Mutex::unlock(status);
+            None
+        }
+    }; //
+
+    match connection {
+        Some((mut socket, _response)) => {
+            socket
+                .write_message(Message::Text(
+                    r#"{ "jsonrpc": "2.0", "id": 1, "method": "slotSubscribe" }"#.into(),
+                ))
+                .unwrap();
+
+            loop {
+                match socket.read_message() {
+                    Ok(msg) => {
+                        let res =
+                            serde_json::from_str::<SlotSubscribeResponse>(msg.to_string().as_str());
+                        // info!("res: {:?}", msg.to_string().as_str());
+                        if let Ok(res) = res {
+                            match slot_update_tx.send(res.params.result.root as u64) {
+                                Ok(_) => {
+                                    info!("slot updated: {:?}", res.params.result.root);
+                                }
+                                Err(e) => {
+                                    info!(
+                                        "error here: {:?} {:?}",
+                                        e, res.params.result.root as u64
+                                    );
+                                    continue; // @TODO: we should add retries here incase send fails for some reason
+                                }
+                            }
                         }
                     }
+                    Err(e) => info!("err: {:?}", e),
                 }
             }
-            Err(e) => println!("err: {:?}", e),
         }
+        None => {}
     }
 }
 
@@ -159,11 +188,25 @@ async fn shred_update_loop(
     slot_update_rx: Receiver<u64>,
     endpoint: String,
     shred_tx: Sender<(Vec<Option<Shred>>, solana_ledger::shred::Pubkey)>,
+    status_sampler: Arc<Mutex<ClientStatus>>,
 ) {
     loop {
+        {
+            let mut status = status_sampler.lock().unwrap();
+
+            if let ClientStatus::Crashed(_) = &*status {
+                Mutex::unlock(status);
+            } else {
+                *status = ClientStatus::Active(String::from(
+                    "Monitoring Tinydancer: Actively Sampling Shreds",
+                ));
+                Mutex::unlock(status);
+            }
+        }
+
         if let Ok(slot) = slot_update_rx.recv() {
             let shred_for_one = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
-            // println!("res {:?}", shred_for_one);
+            // info!("res {:?}", shred_for_one);
             let shred_indices_for_slot = match shred_for_one {
                 Ok(first_shred) => {
                     let first_shred = &first_shred.result.shreds[1].clone(); // add some check later
@@ -189,10 +232,10 @@ async fn shred_update_loop(
                             _ => None,
                         }
                     } else {
-                        println!("shred: {:?}", first_shred);
+                        info!("shred: {:?}", first_shred);
                         None
                     };
-                    println!("max_shreds_per_slot {:?}", max_shreds_per_slot);
+                    info!("max_shreds_per_slot {:?}", max_shreds_per_slot);
 
                     if let Some(max_shreds_per_slot) = max_shreds_per_slot {
                         let mut indices = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
@@ -208,7 +251,7 @@ async fn shred_update_loop(
                     None
                 }
             };
-            println!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
+            info!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
             if let Some(shred_indices_for_slot) = shred_indices_for_slot.clone() {
                 let shreds_for_slot = request_shreds(
                     slot as usize,
@@ -216,21 +259,21 @@ async fn shred_update_loop(
                     endpoint.clone(),
                 )
                 .await;
-                // println!("made 2nd req: {:?}", shreds_for_slot);
+                // info!("made 2nd req: {:?}", shreds_for_slot);
                 if let Ok(shreds_for_slot) = shreds_for_slot {
-                    println!("get shred for slot in 2nd req");
+                    info!("get shred for slot in 2nd req");
                     let mut shreds: Vec<Option<Shred>> = shreds_for_slot
                         .result
                         .shreds
                         .par_iter()
                         .map(|s| try_coerce_shred!(s))
                         .collect();
-                    // println!("before leader");
+                    // info!("before leader");
                     let leader = solana_ledger::shred::Pubkey::from_str(
                         shreds_for_slot.result.leader.as_str(),
                     )
                     .unwrap();
-                    // println!("leader {:?}", leader);
+                    // info!("leader {:?}", leader);
                     let mut fullfill_count = AtomicU32::new(0u32);
                     shreds.dedup();
                     shreds.iter().for_each(|f| {
@@ -322,11 +365,11 @@ pub async fn shred_verify_loop(
                     }
                 }
                 None => {
-                    println!("none")
+                    info!("none")
                 }
             });
         } else {
-            println!("None")
+            info!("None")
         }
     }
 }
@@ -348,7 +391,7 @@ pub async fn shred_archiver(
                 &verified_shred.index().to_le_bytes(),
             ])
             .to_bytes();
-            // println!("archiver {:?}", verified_shred.slot(),);
+            // info!("archiver {:?}", verified_shred.slot(),);
             // let cfs =
             //     rocksdb::DB::list_cf(&opts, archive_config.archive_path.clone()).unwrap_or(vec![]);
             // let shred_cf = cfs.clone().into_iter().find(|cf| cf.as_str() == SHRED_CF);
@@ -360,7 +403,7 @@ pub async fn shred_archiver(
             let put_response = put_serialized(&instance, cf, key, &verified_shred);
             match put_response {
                 Ok(_) => info!("Saved Shred {:?} to db", verified_shred.id().seed(&leader)),
-                Err(e) => println!("{:?}", e),
+                Err(e) => info!("{:?}", e),
             }
             //     }
             //     None => instance
@@ -372,7 +415,7 @@ pub async fn shred_archiver(
 }
 pub async fn pull_and_verify_shreds(slot: usize, endpoint: String) -> bool {
     let shred_for_one = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
-    // println!("res {:?}", shred_for_one);
+    // info!("res {:?}", shred_for_one);
     let shred_indices_for_slot = match shred_for_one {
         Ok(first_shred) => {
             let first_shred = &first_shred.result.shreds[1].clone(); // add some check later
@@ -398,10 +441,10 @@ pub async fn pull_and_verify_shreds(slot: usize, endpoint: String) -> bool {
                     _ => None,
                 }
             } else {
-                println!("shred: {:?}", first_shred);
+                info!("shred: {:?}", first_shred);
                 None
             };
-            println!("max_shreds_per_slot {:?}", max_shreds_per_slot);
+            info!("max_shreds_per_slot {:?}", max_shreds_per_slot);
 
             if let Some(max_shreds_per_slot) = max_shreds_per_slot {
                 let mut indices = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
@@ -417,7 +460,7 @@ pub async fn pull_and_verify_shreds(slot: usize, endpoint: String) -> bool {
             None
         }
     };
-    println!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
+    info!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
     if let Some(shred_indices_for_slot) = shred_indices_for_slot.clone() {
         let shreds_for_slot = request_shreds(
             slot as usize,
@@ -425,20 +468,20 @@ pub async fn pull_and_verify_shreds(slot: usize, endpoint: String) -> bool {
             endpoint.clone(),
         )
         .await;
-        // println!("made 2nd req: {:?}", shreds_for_slot);
+        // info!("made 2nd req: {:?}", shreds_for_slot);
         if let Ok(shreds_for_slot) = shreds_for_slot {
-            println!("get shred for slot in 2nd req");
+            info!("get shred for slot in 2nd req");
             let mut shreds: Vec<Option<Shred>> = shreds_for_slot
                 .result
                 .shreds
                 .par_iter()
                 .map(|s| try_coerce_shred!(s))
                 .collect();
-            // println!("before leader");
+            // info!("before leader");
             let leader =
                 solana_ledger::shred::Pubkey::from_str(shreds_for_slot.result.leader.as_str())
                     .unwrap();
-            // println!("leader {:?}", leader);
+            // info!("leader {:?}", leader);
             let mut fullfill_count = AtomicU32::new(0u32);
             shreds.dedup();
             shreds.iter().for_each(|f| {
@@ -474,7 +517,7 @@ pub async fn pull_and_verify_shreds(slot: usize, endpoint: String) -> bool {
                 .par_iter()
                 .flatten()
                 .all(|s| verify_sample(s, leader));
-            println!("pull and verify {:?}", sampled);
+            info!("pull and verify {:?}", sampled);
             sampled
         } else {
             false
@@ -573,6 +616,7 @@ mod tests {
     use solana_client::nonblocking::rpc_client::RpcClient;
     use solana_ledger::shred::{hashv, Shred, ShredType, Signer};
     use solana_sdk::signer::keypair::Keypair;
+    use tiny_logger::logs::info;
 
     #[test]
     fn get_shred_from_db() {
@@ -597,7 +641,7 @@ mod tests {
             "error retrieving and serializing shred from db"
         );
     }
-    #[ignore]
+
     #[tokio::test]
     async fn call_lite_rpc() {
         let rpc_client = RpcClient::new("http://0.0.0.0:8890".to_string());
@@ -609,6 +653,6 @@ mod tests {
             .request_airdrop(&payer.try_pubkey().unwrap(), 2000000000)
             .await
             .unwrap();
-        print!("AIRDROP CONFIRMED:{}", airdrop_sign);
+        println!("AIRDROP CONFIRMED:{}", airdrop_sign);
     }
 }

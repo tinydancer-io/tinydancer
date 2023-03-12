@@ -1,14 +1,20 @@
 use crate::sampler::GetShredResponse;
-use crate::tinydancer::{ClientService, TinyDancer};
+use crate::tinydancer::{ClientService, ClientStatus, TinyDancer};
 use async_trait::async_trait;
+use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use spinoff::{spinners, Color as SpinColor, Spinner};
+use std::sync::{Arc, Mutex};
+use std::thread::sleep;
+use std::time::Duration;
 use std::{any::Any, thread::Thread};
 use std::{fmt, thread::JoinHandle};
 use thiserror::Error;
+use tiny_logger::logs::info;
 use tui::layout::Rect;
 use tui::style::{Color, Modifier, Style};
 use tui::text::{Span, Spans};
@@ -34,7 +40,7 @@ pub struct App {
     table: TableState,
     slot_list: StatefulList<(String, usize)>,
     peers_list: StatefulList<Vec<String>>,
-    full_nodes_list: StatefulList<Vec<String>>
+    full_nodes_list: StatefulList<Vec<String>>,
 }
 
 // pub struct SlotList {
@@ -99,23 +105,27 @@ impl TabsState {
     pub fn previous(&mut self) {
         if self.index > 0 {
             self.index -= 1;
-        }
-        else {
+        } else {
             self.index = self.titles.len() - 1;
         }
     }
 }
-pub struct UiConfig {}
+pub struct UiConfig {
+    pub client_status: Arc<Mutex<ClientStatus>>,
+}
 // main draw function
 pub fn draw<B: Backend>(f: &mut Frame<B>) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(20), Constraint::Percentage(40), Constraint::Percentage(40)].as_ref())
+        .constraints(
+            [
+                Constraint::Percentage(20),
+                Constraint::Percentage(40),
+                Constraint::Percentage(40),
+            ]
+            .as_ref(),
+        )
         .split(f.size());
-
-
-
-
 }
 
 fn draw_first_tab<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
@@ -135,7 +145,6 @@ where
 
     //ui(f, app, chunks[0]);
     draw_slot_list(f, app, chunks[0]);
-    
 }
 fn draw_second_tab<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
 where
@@ -151,11 +160,9 @@ where
             .as_ref(),
         )
         .split(area);
-     //todo: Draw network usage metrics here
-        todo!()
+    //todo: Draw network usage metrics here
+    todo!()
 }
-
-
 
 // draws list of slots
 fn draw_slot_list<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
@@ -178,28 +185,88 @@ fn draw_slot_list<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
         })
         .collect();
     let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title("SLOTS"))
-            .highlight_style(Style::default().bg(Color::Cyan).add_modifier(Modifier::BOLD))
-            .highlight_symbol(">>");
+        .block(Block::default().borders(Borders::ALL).title("SLOTS"))
+        .highlight_style(
+            Style::default()
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol(">>");
     f.render_stateful_widget(list, area, &mut app.slot_list.state);
     // let peers_list: Vec<ListItem> = app
     //     .peers_list
     //     .items
     //     .iter()
     //     .map(|i|{
-        
-    //     })     
-          
+
+    //     })
 }
 
 #[async_trait]
 impl ClientService<UiConfig> for UiService {
     type ServiceError = ThreadJoinError;
     fn new(config: UiConfig) -> Self {
-        let ui_service_handle = std::thread::spawn(|| loop {
-            println!("rendering ui");
-            std::thread::sleep(std::time::Duration::from_secs(2));
+        let ui_service_handle = std::thread::spawn(move || loop {
+            let mut threads = Vec::default();
+
+            threads.push(std::thread::spawn(|| {
+                info!("rendering ui");
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }));
+
+            let client_status = config.client_status.clone();
+            let mut spinner =
+                Spinner::new(spinners::Dots, "Initializing Client...", SpinColor::Yellow);
+
+            threads.push(std::thread::spawn(move || loop {
+                sleep(Duration::from_secs(1));
+
+                let status = client_status.lock().unwrap();
+                match &*status {
+                    ClientStatus::Active(msg) => {
+                        spinner.update(spinners::Dots, msg.clone(), SpinColor::Green);
+                        // sleep(Duration::from_secs(100));
+                    }
+                    ClientStatus::Initializing(msg) => {
+                        spinner.update(spinners::Dots, msg.clone(), SpinColor::Yellow);
+                    }
+                    ClientStatus::Crashed(msg) => {
+                        spinner.update(spinners::Dots, msg.clone(), SpinColor::Red);
+                    }
+                    ClientStatus::ShuttingDown(msg) => {
+                        spinner.update(spinners::Dots, msg.clone(), SpinColor::White);
+                        sleep(Duration::from_millis(500));
+                        std::process::exit(0);
+                    }
+                    _ => {}
+                }
+                Mutex::unlock(status);
+                enable_raw_mode();
+                if crossterm::event::poll(Duration::from_millis(100)).unwrap() {
+                    let ev = crossterm::event::read().unwrap();
+
+                    if ev
+                        == Event::Key(KeyEvent {
+                            code: KeyCode::Char('c'),
+                            modifiers: KeyModifiers::CONTROL,
+                            kind: KeyEventKind::Press,
+                            state: KeyEventState::NONE,
+                        })
+                    {
+                        let mut status = client_status.lock().unwrap();
+                        *status =
+                            ClientStatus::ShuttingDown(String::from("Shutting Down Gracefully..."));
+                        Mutex::unlock(status);
+                        disable_raw_mode();
+                    }
+                }
+            }));
+
+            for handle in threads {
+                handle.join();
+            }
         });
+
         Self { ui_service_handle }
     }
     async fn join(self) -> std::result::Result<(), Self::ServiceError> {

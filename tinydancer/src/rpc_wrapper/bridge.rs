@@ -370,14 +370,14 @@ impl LiteRpcServer for LiteBridge {
         config: Option<RpcRequestAirdropConfig>,
     ) -> crate::rpc_wrapper::rpc::Result<String> {
         RPC_REQUEST_AIRDROP.inc();
-        // panic!("HERE!!!!!!!!");
+
         let pubkey = match Pubkey::from_str(&pubkey_str) {
             Ok(pubkey) => pubkey,
             Err(err) => {
                 return Err(jsonrpsee::core::Error::Custom(err.to_string()));
             }
         };
-        // panic!("HERE!!!!!!!! {:?}", pubkey);
+
         let airdrop_sig = match self
             .rpc_client
             .request_airdrop_with_config(&pubkey, lamports, config.unwrap_or_default())
@@ -385,7 +385,6 @@ impl LiteRpcServer for LiteBridge {
         {
             Ok(airdrop_sig) => airdrop_sig.to_string(),
             Err(err) => {
-                // println!("ERROR!!!!!!!! {:?}", err);
                 return Err(jsonrpsee::core::Error::Custom(err.to_string()));
             }
         };

@@ -104,7 +104,7 @@ impl ClientService<TransactionServiceConfig> for TransactionService {
             let airdrop_sign = rpc_client
                 .request_airdrop(&payer.try_pubkey().unwrap(), 2000000000)
                 .await?;
-            print!("AIRDROP CONFIRMED:{}", airdrop_sign);
+            info!("AIRDROP CONFIRMED:{}", airdrop_sign);
             let tx_batch_interval_ms = Duration::from_millis(DEFAULT_TX_BATCH_INTERVAL_MS);
             let clean_interval_ms = Duration::from_millis(DEFAULT_CLEAN_INTERVAL_MS);
 

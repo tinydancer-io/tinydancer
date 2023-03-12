@@ -1,7 +1,11 @@
 //! Sampler struct - incharge of sampling shreds
 // use rayon::prelude::*;
 
-use std::{env, sync::Arc, thread::Result};
+use std::{
+    env,
+    sync::{Arc, Mutex, MutexGuard},
+    thread::Result,
+};
 
 // use tokio::time::Duration;
 use crate::{
@@ -11,6 +15,7 @@ use crate::{
     ui::{UiConfig, UiService},
 };
 use async_trait::async_trait;
+use tiny_logger::logs::info;
 // use log::info;
 // use log4rs;
 use std::error::Error;
@@ -69,8 +74,11 @@ pub fn get_project_root() -> io::Result<PathBuf> {
 impl TinyDancer {
     pub async fn new(config: TinyDancerConfig) -> Self {
         let path = get_project_root().unwrap();
+        let status = ClientStatus::Initializing(String::from("Starting Up Tinydancer"));
+        let client_status = Arc::new(Mutex::new(status));
+        let status_sampler = Arc::clone(&client_status);
         // datapoint_info!("log", ("test", "testvalue", String));
-        println!("{:?}", path);
+        info!("{:?}", path);
         tiny_logger::setup_file_with_default(path.to_str().unwrap(), "RUST_LOG");
         let TinyDancerConfig {
             enable_ui_service,
@@ -98,6 +106,7 @@ impl TinyDancer {
             cluster: rpc_endpoint,
             archive_config,
             instance: sample_instance,
+            status_sampler,
         };
         let sample_service = SampleService::new(sample_service_config);
         let transaction_service = TransactionService::new(TransactionServiceConfig {
@@ -105,7 +114,7 @@ impl TinyDancer {
             db_instance: rpc_instance,
         });
         let ui_service = if enable_ui_service {
-            Some(UiService::new(UiConfig {}))
+            Some(UiService::new(UiConfig { client_status }))
         } else {
             None
         };
@@ -148,4 +157,11 @@ pub fn endpoint(cluster: Cluster) -> String {
         Cluster::Localnet => String::from("http://0.0.0.0:8899"),
         Cluster::Custom(cluster) => cluster.to_string(),
     }
+}
+pub enum ClientStatus {
+    Initializing(String),
+    SearchingForRPCService(String),
+    Active(String),
+    Crashed(String),
+    ShuttingDown(String),
 }

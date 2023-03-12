@@ -27,15 +27,16 @@
 #![feature(async_closure)]
 #![allow(unused_imports)]
 #![allow(dead_code)]
+#![feature(mutex_unlock)]
 mod tinydancer;
 use std::io;
 
 use sampler::ArchiveConfig;
 use tinydancer::{Cluster, TinyDancer, TinyDancerConfig};
 mod macros;
+mod rpc_wrapper;
 mod sampler;
 mod ui;
-mod rpc_wrapper;
 
 use clap::{ArgGroup, Parser, Subcommand};
 #[derive(Parser, Debug)]
