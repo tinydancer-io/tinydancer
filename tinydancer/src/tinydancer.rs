@@ -1,12 +1,13 @@
 //! Sampler struct - incharge of sampling shreds
 // use rayon::prelude::*;
 
-use std::{env, thread::Result};
+use std::{env, sync::Arc, thread::Result};
 
 // use tokio::time::Duration;
 use crate::{
     block_on,
-    sampler::{ArchiveConfig, SampleService, SampleServiceConfig},
+    rpc_wrapper::{TransactionService, TransactionServiceConfig},
+    sampler::{ArchiveConfig, SampleService, SampleServiceConfig, SHRED_CF},
     ui::{UiConfig, UiService},
 };
 use async_trait::async_trait;
@@ -28,6 +29,7 @@ pub struct TinyDancer {
     ui_service: Option<UiService>,
     sample_qty: u64,
     config: TinyDancerConfig,
+    transaction_service: TransactionService,
 }
 #[derive(Clone)]
 pub struct TinyDancerConfig {
@@ -76,11 +78,32 @@ impl TinyDancer {
             sample_qty,
             archive_config,
         } = config.clone();
+        let rpc_cluster = rpc_endpoint.clone();
+
+        let mut opts = rocksdb::Options::default();
+        opts.create_if_missing(true);
+        opts.set_error_if_exists(false);
+        opts.create_missing_column_families(true);
+        let instance = rocksdb::DB::open_cf(
+            &opts,
+            archive_config.clone().unwrap().archive_path,
+            vec![SHRED_CF],
+        )
+        .unwrap();
+        let instance = Arc::new(instance);
+        let sample_instance = Arc::clone(&instance);
+
+        let rpc_instance = Arc::clone(&instance);
         let sample_service_config = SampleServiceConfig {
             cluster: rpc_endpoint,
             archive_config,
+            instance: sample_instance,
         };
         let sample_service = SampleService::new(sample_service_config);
+        let transaction_service = TransactionService::new(TransactionServiceConfig {
+            cluster: rpc_cluster,
+            db_instance: rpc_instance,
+        });
         let ui_service = if enable_ui_service {
             Some(UiService::new(UiConfig {}))
         } else {
@@ -91,6 +114,7 @@ impl TinyDancer {
             ui_service,
             sample_qty,
             sample_service,
+            transaction_service,
         }
     }
     pub async fn join(self) {
@@ -98,6 +122,10 @@ impl TinyDancer {
             .join()
             .await
             .expect("error in sample service thread");
+        self.transaction_service
+            .join()
+            .await
+            .expect("ERROR IN SIMPLE PAYMENT SERVICE");
         if let Some(ui_service) = self.ui_service {
             block_on!(async { ui_service.join().await }, "Ui Service Error");
         }

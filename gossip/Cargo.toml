@@ -23,26 +23,26 @@ rayon = "1.5.3"
 serde = "1.0.152"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"
-solana-bloom = { path = "../../diet-rpc-validator/bloom", version = "=1.15.0" }
-solana-clap-utils = { path = "../../diet-rpc-validator/clap-utils", version = "=1.15.0" }
-solana-client = { path = "../../diet-rpc-validator/client", version = "=1.15.0" }
-solana-entry = { path = "../../diet-rpc-validator/entry", version = "=1.15.0" }
-solana-frozen-abi = { path = "../../diet-rpc-validator/frozen-abi", version = "=1.15.0" }
-solana-frozen-abi-macro = { path = "../../diet-rpc-validator/frozen-abi/macro", version = "=1.15.0" }
-solana-ledger = { path = "../../diet-rpc-validator/ledger", version = "=1.15.0" }
-solana-logger = { path = "../../diet-rpc-validator/logger", version = "=1.15.0" }
-solana-measure = { path = "../../diet-rpc-validator/measure", version = "=1.15.0" }
-solana-metrics = { path = "../../diet-rpc-validator/metrics", version = "=1.15.0" }
-solana-net-utils = { path = "../../diet-rpc-validator/net-utils", version = "=1.15.0" }
-solana-perf = { path = "../../diet-rpc-validator/perf", version = "=1.15.0" }
-solana-rayon-threadlimit = { path = "../../diet-rpc-validator/rayon-threadlimit", version = "=1.15.0" }
-solana-runtime = { path = "../../diet-rpc-validator/runtime", version = "=1.15.0" }
-solana-sdk = { path = "../../diet-rpc-validator/sdk", version = "=1.15.0" }
-solana-streamer = { path = "../../diet-rpc-validator/streamer", version = "=1.15.0" }
-solana-thin-client = { path = "../../diet-rpc-validator/thin-client", version = "=1.15.0" }
-solana-tpu-client = { path = "../../diet-rpc-validator/tpu-client", version = "=1.15.0", default-features = false }
-solana-version = { path = "../../diet-rpc-validator/version", version = "=1.15.0" }
-solana-vote-program = { path = "../../diet-rpc-validator/programs/vote", version = "=1.15.0" }
+solana-bloom = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-clap-utils = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-client = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-entry = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-frozen-abi = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-frozen-abi-macro = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-ledger = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-logger = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-measure = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-metrics = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-net-utils = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-perf = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-rayon-threadlimit = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-runtime = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-sdk = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-streamer = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-thin-client = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-tpu-client = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0", default-features = false }
+solana-version = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
+solana-vote-program = { git = "https://github.com/tinydancer-io/diet-rpc-validator", version = "=1.15.0" }
 static_assertions = "1.1.0"
 thiserror = "1.0"
 
@@ -54,4 +54,4 @@ serial_test = "0.9.0"
 
 [[bin]]
 name = "tiny-gossip"
-path = "src/main.rs"
+git = "src/main.rs"
