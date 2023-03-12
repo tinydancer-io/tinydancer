@@ -30,16 +30,22 @@
 #![feature(mutex_unlock)]
 mod tinydancer;
 use std::{
+    f32::consts::E,
     fs::{self, File, OpenOptions},
     io,
     path::{Path, PathBuf},
+    thread::sleep,
+    time::Duration,
 };
 
-use sampler::ArchiveConfig;
+use crossterm::style::Stylize;
+use sampler::{pull_and_verify_shreds, ArchiveConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tinydancer::{Cluster, TinyDancer, TinyDancerConfig};
+use spinoff::{spinners, Color, Spinner};
+use tinydancer::{endpoint, Cluster, TinyDancer, TinyDancerConfig};
 mod macros;
+use colored::Colorize;
 mod rpc_wrapper;
 mod sampler;
 mod ui;
@@ -75,6 +81,11 @@ pub enum Commands {
         /// Duration after which shreds will be purged
         #[clap(required = false, default_value_t = 10000000)]
         shred_archive_duration: u64,
+    },
+    /// Verify the samples for a single slot
+    Verify {
+        #[clap(long, required = false, default_value = "0")]
+        slot: usize,
     },
     /// Stream the client logs to your terminal
     Logs {
@@ -158,27 +169,44 @@ async fn main() {
         Commands::Config(sub_config) => match sub_config {
             ConfigSubcommands::Get => {
                 let home_path = std::env::var("HOME").unwrap();
-                std::process::Command::new("cat")
-                    .arg(home_path + "/.config/tinydancer/config.json")
-                    .spawn()
-                    .expect("Config not set");
+                let is_existing = home_path.clone() + "/.config/tinydancer/config.json";
+                let path = Path::new(&is_existing);
+                if path.exists() {
+                    std::process::Command::new("cat")
+                        .arg(home_path + "/.config/tinydancer/config.json")
+                        .spawn()
+                        .expect("Config not set");
+                } else {
+                    println!(
+                        "{} {}",
+                        "Initialise a config first using:".to_string().yellow(),
+                        "tinydancer set config".to_string().green()
+                    );
+                }
             }
             ConfigSubcommands::Set { log_path, cluster } => {
                 // println!("{:?}", fs::create_dir_all("~/.config/tinydancer"));
 
                 let home_path = std::env::var("HOME").unwrap();
-
-                std::process::Command::new("mkdir")
-                    .arg(home_path.clone() + "/.config/tinydancer")
-                    .stdout(std::process::Stdio::null())
-                    .spawn()
-                    .expect("couldnt make dir");
-                // home_path.push_str("/config.json");
-                std::process::Command::new("touch")
-                    .arg(home_path.clone() + "/.config/tinydancer/config.json")
-                    .stdout(std::process::Stdio::null())
-                    .spawn()
-                    .expect("couldnt make file");
+                let is_existing = home_path.clone() + "/.config/tinydancer";
+                let path = Path::new(&is_existing);
+                if !path.exists() {
+                    std::process::Command::new("mkdir")
+                        .arg(home_path.clone() + "/.config/tinydancer")
+                        .stdout(std::process::Stdio::null())
+                        .spawn()
+                        .expect("couldnt make dir");
+                }
+                let is_existing = home_path.clone() + "/.config/tinydancer/config.json";
+                let path = Path::new(&is_existing);
+                if !path.exists() {
+                    std::process::Command::new("touch")
+                        .arg(home_path.clone() + "/.config/tinydancer/config.json")
+                        .stdout(std::process::Stdio::null())
+                        .spawn()
+                        .expect("couldnt make file");
+                }
+                sleep(Duration::from_secs(1));
                 loop {
                     let mut config_file = {
                         let home_path = std::env::var("HOME").unwrap();
@@ -200,6 +228,7 @@ async fn main() {
                                 serde_json::to_string_pretty(&config_file).unwrap(),
                             )
                             .unwrap();
+                            break;
                         }
                         Err(_) => {
                             std::fs::write(
@@ -217,6 +246,58 @@ async fn main() {
                 }
             }
         },
+        Commands::Verify { slot } => {
+            let mut spinner = Spinner::new(
+                spinners::Dots,
+                format!("Verifying Shreds for Slot {}", slot),
+                Color::Green,
+            );
+            let home_path = std::env::var("HOME").unwrap();
+            let is_existing = home_path.clone() + "/.config/tinydancer/config.json";
+            let path = Path::new(&is_existing);
+            if path.exists() {
+                let mut config_file = {
+                    let home_path = std::env::var("HOME").unwrap();
+
+                    let text =
+                        std::fs::read_to_string(home_path + "/.config/tinydancer/config.json")
+                            .unwrap();
+
+                    serde_json::from_str::<ConfigSchema>(&text)
+                };
+                // println!("path {:?}", config_file);
+                match config_file {
+                    Ok(config_file) => {
+                        let is_verified =
+                            pull_and_verify_shreds(slot, get_endpoint(config_file.cluster)).await;
+                        println!("out: {:?}", is_verified);
+                        if is_verified {
+                            println!(
+                                "Slot {} is {} ✓",
+                                slot.to_string().yellow(),
+                                "Valid".to_string().green()
+                            );
+                        } else {
+                            println!(
+                                "Slot {} is not {} ❌",
+                                slot.to_string().yellow(),
+                                "Valid".to_string().red()
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tiny_logger::logs::error!("{}", e);
+                        println!("e {:?}", e);
+                    }
+                };
+            } else {
+                println!(
+                    "{} {}",
+                    "Initialise a config first using:".to_string().yellow(),
+                    "tinydancer set config".to_string().green()
+                );
+            }
+        }
     }
 }
 
@@ -226,6 +307,14 @@ pub fn get_cluster(cluster: String) -> Cluster {
         "Devnet" => Cluster::Devnet,
         "Localnet" => Cluster::Localnet,
         _ => Cluster::Custom(cluster),
+    }
+}
+pub fn get_endpoint(cluster: String) -> String {
+    match cluster.as_str() {
+        "Mainnet" => "https://api.mainnet-beta.solana.com".to_owned(),
+        "Devnet" => "https://api.devnet.solana.com".to_owned(),
+        "Localnet" => "http://0.0.0.0:8899".to_owned(),
+        _ => "http://0.0.0.0:8899".to_owned(),
     }
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "tinydancer"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 default-run = "tinydancer"
 authors = ["Anoushk Kharangate <kharangateanoushk04@email.com>"]
@@ -64,7 +64,7 @@ tower-http = { version = "0.4.0", features = ["full"] }
 hyper = "0.14.25"
 tower = "0.4.13"
 home = "0.5.4"
-# colored = "2.0.0"
+colored = "2.0.0"
 # ctrlc = "3.2.5"
 
 [dependencies.rocksdb]

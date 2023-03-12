@@ -5776,7 +5776,7 @@ dependencies = [
 
 [[package]]
 name = "tinydancer"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -5785,6 +5785,7 @@ dependencies = [
  "bincode",
  "bs58",
  "clap 3.2.23",
+ "colored",
  "const_env",
  "crossbeam",
  "crossterm 0.26.0",
