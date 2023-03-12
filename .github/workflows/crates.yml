@@ -20,6 +20,6 @@ jobs:
           toolchain: nightly
           override: true
 
-      - run: cargo publish --token ${CRATES_TOKEN}
+      - run: cargo publish -p tinydancer --token ${CRATES_TOKEN} --no-verify
         env:
           CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
