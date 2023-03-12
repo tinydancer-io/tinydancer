@@ -2,7 +2,6 @@ on:
   push:
     # Pattern matched against refs/tags
     branch: ["master"]
-  workflow_dispatch:
 
 name: Publish to crates.io
 
