@@ -2,8 +2,6 @@ on:
   push:
     # Pattern matched against refs/tags
     branch: ["master"]
-    tags:
-      - "*" # Push events to every tag not containing /
   workflow_dispatch:
 
 name: Publish to crates.io
