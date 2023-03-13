@@ -79,7 +79,6 @@ impl TinyDancer {
         let client_status = Arc::new(Mutex::new(status));
         let status_sampler = Arc::clone(&client_status);
 
-        tiny_logger::setup_file_with_default(&config.log_path, "RUST_LOG");
         let TinyDancerConfig {
             enable_ui_service,
             rpc_endpoint,
@@ -88,6 +87,8 @@ impl TinyDancer {
             log_path,
             archive_config,
         } = config.clone();
+        std::env::set_var("RUST_LOG", "info");
+        tiny_logger::setup_file_with_default(&log_path, "RUST_LOG");
         let rpc_cluster = rpc_endpoint.clone();
 
         let mut opts = rocksdb::Options::default();

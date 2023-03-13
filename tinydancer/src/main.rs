@@ -271,7 +271,7 @@ async fn main() {
                     Ok(config_file) => {
                         let is_verified =
                             pull_and_verify_shreds(slot, get_endpoint(config_file.cluster)).await;
-                        println!("out: {:?}", is_verified);
+
                         if is_verified {
                             println!(
                                 "Slot {} is {} ✓",

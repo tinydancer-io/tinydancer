@@ -224,7 +224,7 @@ impl ClientService<UiConfig> for UiService {
                     Spinner::new(spinners::Dots, "Initializing Client...", SpinColor::Yellow);
 
                 threads.push(std::thread::spawn(move || loop {
-                    sleep(Duration::from_secs(1));
+                    sleep(Duration::from_millis(100));
 
                     let status = client_status.lock().unwrap();
                     match &*status {
