@@ -143,6 +143,7 @@ async fn main() {
                         rpc_endpoint: get_cluster(config_file.cluster),
                         sample_qty,
                         tui_monitor,
+                        log_path: config_file.log_path,
                         archive_config: {
                             if let Some(path) = archive_path {
                                 Some(ArchiveConfig {

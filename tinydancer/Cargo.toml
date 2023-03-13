@@ -1,6 +1,6 @@
 [package]
 name = "tinydancer"
-version = "0.0.4"
+version = "0.0.5"
 edition = "2021"
 default-run = "tinydancer"
 authors = ["Anoushk Kharangate <kharangateanoushk04@email.com>"]

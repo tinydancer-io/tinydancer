@@ -43,6 +43,7 @@ pub struct TinyDancerConfig {
     pub enable_ui_service: bool,
     pub archive_config: Option<ArchiveConfig>,
     pub tui_monitor: bool,
+    pub log_path: String,
 }
 
 use solana_metrics::datapoint_info;
@@ -74,18 +75,17 @@ pub fn get_project_root() -> io::Result<PathBuf> {
 }
 impl TinyDancer {
     pub async fn new(config: TinyDancerConfig) -> Self {
-        let path = get_project_root().unwrap();
         let status = ClientStatus::Initializing(String::from("Starting Up Tinydancer"));
         let client_status = Arc::new(Mutex::new(status));
         let status_sampler = Arc::clone(&client_status);
-        // datapoint_info!("log", ("test", "testvalue", String));
-        info!("{:?}", path);
-        tiny_logger::setup_file_with_default(path.to_str().unwrap(), "RUST_LOG");
+
+        tiny_logger::setup_file_with_default(&config.log_path, "RUST_LOG");
         let TinyDancerConfig {
             enable_ui_service,
             rpc_endpoint,
             sample_qty,
             tui_monitor,
+            log_path,
             archive_config,
         } = config.clone();
         let rpc_cluster = rpc_endpoint.clone();
