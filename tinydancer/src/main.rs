@@ -274,13 +274,13 @@ async fn main() {
 
                         if is_verified {
                             println!(
-                                "Slot {} is {} ✓",
+                                "\nSlot {} is {} ✓",
                                 slot.to_string().yellow(),
                                 "Valid".to_string().green()
                             );
                         } else {
                             println!(
-                                "Slot {} is not {} ❌",
+                                "\nSlot {} is not {} ❌",
                                 slot.to_string().yellow(),
                                 "Valid".to_string().red()
                             );
