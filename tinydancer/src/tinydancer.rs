@@ -71,7 +71,7 @@ impl TinyDancer {
         println!("{:?}", path);
         tiny_logger::setup_file_with_default(path.to_str().unwrap(), "RUST_LOG");
         let TinyDancerConfig {
-            enable_ui_service,
+            enable_ui_service:_,
             rpc_endpoint,
             sample_qty,
             archive_config,

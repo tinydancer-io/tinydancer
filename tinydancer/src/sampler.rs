@@ -85,7 +85,6 @@ impl ClientService<SampleServiceConfig> for SampleService {
             let (slot_update_tx, slot_update_rx) = crossbeam::channel::unbounded::<u64>();
             let (shred_tx, shred_rx) = crossbeam::channel::unbounded();
             let (ui_slot_update_tx, ui_slot_update_rx) = crossbeam::channel::unbounded::<usize>();
-            let (slot_tx, slot_rx) = crossbeam::channel::unbounded::<usize>();
             let (verified_shred_tx, verified_shred_rx) = crossbeam::channel::unbounded();
             let (v_stats_update_tx, v_stats_update_rx) = crossbeam::channel::unbounded::<u64>();
             threads.push(tokio::spawn(slot_update_loop(
@@ -145,7 +144,7 @@ impl ClientService<SampleServiceConfig> for SampleService {
             )));
             threads.push(tokio::spawn(start_ui_loop(read_instance, ui_slot_update_rx)));
             for thread in threads {
-                thread.await;
+                thread.await.expect("EVERYTHING FAILED");
             }
         });
         let sample_indices: Vec<u64> = Vec::default();
@@ -254,8 +253,8 @@ async fn shred_update_loop(
                     // right after it contains coding shred (ShredCode) (Option<ShredData> is None here).
                     // Implementing Iterator trait over RpcShred should help here.
                     //  let vec_shreds: Vec<RpcShred> = _first_shred.result.shreds.into_iter().flatten().skip(1).step_by(2).collect();
-                    let vec_shreds: Vec<RpcShred> =
-                        _first_shred.result.shreds.into_iter().flatten().collect();
+                   // let vec_shreds: Vec<RpcShred> =
+                  //      _first_shred.result.shreds.into_iter().flatten().collect();
                     // println!("{:?}",vec_shreds);
                     // let n: Vec<u16> = vec_shreds.into_iter().map(|s| match (s.clone().shred_data,
                     // s.clone().shred_code){

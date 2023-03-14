@@ -105,7 +105,7 @@ pub fn display(
 
     // create app and run it
     let app = App::new("Sampler Statistics".to_string(), slot_list, r_list, v_list);
-    let res = run_app(&mut terminal, app, Duration::from_millis(495));
+    let res = run_app(&mut terminal, app, Duration::from_millis(499));
 
     // restore terminal
     disable_raw_mode()?;
@@ -179,7 +179,7 @@ pub async fn start_ui_loop(
                             slot_u_stats.clone().unwrap().unwrap(), 
                             sample_stats.clone().unwrap().unwrap(),
                             verified_stats.clone().unwrap().unwrap(),
-                        );
+                        ).expect("DIPLAY GOT F'ED");
                     }
             }          
     }

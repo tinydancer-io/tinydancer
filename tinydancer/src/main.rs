@@ -36,7 +36,7 @@ mod macros;
 mod sampler;
 mod ui;
 mod stats;
-mod rpc_wrapper;
+//mod rpc_wrapper;
 
 #[tokio::main]
 async fn main() {
