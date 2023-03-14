@@ -94,7 +94,7 @@ impl ClientService<SampleServiceConfig> for SampleService {
                 slot_db_tx,// to 'store stats' function to use the slot as a key
                 ui_slot_update_tx, // to 'start_ui_loop' function
                 v_stats_update_tx, // to verifier loop for verified stats
-                slot_tx,
+               // slot_tx,
             )));
 
             let (per_req_tx, per_req_rx) = crossbeam::channel::unbounded::<PerRequestSampleStats>();
@@ -142,7 +142,6 @@ impl ClientService<SampleServiceConfig> for SampleService {
                 per_req_rx,
                 verified_stats_rx,
                 store_instance,
-                slot_rx
             )));
             threads.push(tokio::spawn(start_ui_loop(read_instance, ui_slot_update_rx)));
             for thread in threads {
@@ -187,7 +186,7 @@ async fn slot_update_loop(
     slot_db_tx: Sender<SlotUpdateStats>, // to database for storing
     ui_slot_update_tx: Sender<usize>, // to start_ui_loop
     v_stats_update_tx: Sender<u64>, // to verifier loop for veridfied stats
-    slot_tx: Sender<usize>,
+   // slot_tx: Sender<usize>,
 ) {
     let (mut socket, _response) =
         connect(Url::parse(pub_sub.as_str()).unwrap()).expect("Can't connect to websocket");
@@ -203,20 +202,19 @@ async fn slot_update_loop(
                 let res = serde_json::from_str::<SlotSubscribeResponse>(msg.to_string().as_str());
                 // println!("res: {:?}", msg.to_string().as_str());
                 if let Ok(res) = res {
-                    ui_slot_update_tx.send(res.params.result.root as usize).expect("failed to send slot to ui loop!");
-                    slot_tx.send(res.params.result.root as usize).expect("FAILED AGAIN");
+                  //  slot_tx.send(res.params.result.root as usize).expect("FAILED AGAIN");
                     match slot_update_tx.send(res.params.result.root as u64) {
                         Ok(_) => {
                             // println!("slot updated: {:?}", res.params.result.root);
                             // report slot or root from the response?
                             slot_update_stats.slots = res.params.result.root as usize;
-                            
+                            ui_slot_update_tx.send(res.params.result.root as usize).expect("failed to send slot to ui loop!");
                             // slot_tx.send(res.params.result.root as u64).expect("failed to send update to verifier thread");
                             slot_db_tx
                                 .send(SlotUpdateStats::new(res.params.result.root as usize))
                                 .expect("failed");
                             v_stats_update_tx.send(res.params.result.root as u64).expect("failed to send slot update to verifier loop for verified stats");
-                            println!("lol I sent it from here...{}", res.params.result.root);
+                          //  println!("lol I sent it from here...{}", res.params.result.root);
                         }
                         Err(e) => {
                             println!("error here: {:?} {:?}", e, res.params.result.root as u64);

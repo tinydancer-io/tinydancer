@@ -46,7 +46,7 @@ impl App{
    ) -> App{
     App{
         title,
-        tabs: TabsState::new(vec!["Sampler".to_string(), "Network Usage".to_string()]),
+        tabs: TabsState::new(vec!["Sampler".to_string()]),
         slot_list: SlotList::new("SLOTS".to_string(), slot_list),
         per_request_sample_stat_list: PerRequestSampleStatsList::new("Request Stats".to_string(), r_list),
         verification_stats_list: VerificationStatList::new("Verified Stats".to_string(), v_list),
@@ -67,7 +67,11 @@ impl App{
     pub fn on_left(&mut self) {
         self.tabs.previous();
     }
-
+    pub fn on_tick(&mut self) {
+         self.slot_list.state.on_tick();
+         self.per_request_sample_stat_list.state.on_tick();
+         self.verification_stats_list.state.on_tick();
+    }
     pub fn on_key(&mut self, c: char) {
         match c {
             'q' => {
@@ -126,7 +130,7 @@ impl<T> StatefulList<T> {
         }
     }
 
-    fn next(&mut self) {
+    pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
                 if i >= self.items.len() - 1 {
@@ -138,7 +142,7 @@ impl<T> StatefulList<T> {
             None => 0,
         };
     }
-    fn previous(&mut self) {
+   pub fn previous(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
@@ -151,8 +155,12 @@ impl<T> StatefulList<T> {
         };
         self.state.select(Some(i));
     }
-    fn unselect(&mut self) {
+   pub fn unselect(&mut self) {
         self.state.select(None);
+    }
+    pub fn on_tick(&mut self) {
+        let item = self.items.remove(0);
+        self.items.push(item);
     }
 }
 
@@ -207,7 +215,7 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
    f.render_widget(tabs, chunks[0]);
     match app.tabs.index{
         0 => draw_first_tab(f, app, chunks[1]),
-        1 => draw_second_tab(f, app, chunks[1]),
+       // 1 => draw_second_tab(f, app, chunks[1]),
         _ => {}
     }
 
