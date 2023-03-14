@@ -95,6 +95,7 @@ pub enum Commands {
     /// Edit your client config
     #[clap(subcommand)]
     Config(ConfigSubcommands),
+    Slot,
 }
 #[derive(Debug, Subcommand)]
 pub enum ConfigSubcommands {
@@ -159,7 +160,41 @@ async fn main() {
                     client.join().await;
                 }
                 Err(e) => {
-                    println!("error: {:?}", e);
+                    // println!("error: {:?}", e);
+                    std::process::Command::new("echo")
+                        .arg("\"Please set a config first using tindancer config set\"")
+                        .spawn()
+                        .expect("Config not set");
+                }
+            }
+        }
+        Commands::Slot => {
+            let config_file = {
+                let home_path = std::env::var("HOME").unwrap();
+
+                // println!("path {:?}", path);
+                let text =
+                    std::fs::read_to_string(home_path + "/.config/tinydancer/config.json").unwrap();
+
+                serde_json::from_str::<ConfigSchema>(&text)
+            };
+            match config_file {
+                Ok(config_file) => {
+                    let slot_res = send_rpc_call!(
+                        get_endpoint(config_file.cluster),
+                        serde_json::json!({"jsonrpc":"2.0","id":1, "method":"getSlot"}).to_string()
+                    );
+                    let slot = serde_json::from_str::<GetSlotResponse>(slot_res.as_str());
+                    match slot {
+                        Ok(slot) => {
+                            println!("Slot: {}", slot.result.to_string().green(),);
+                        }
+                        Err(e) => {
+                            println!("Failed to get slot,due to error: {}", e.to_string().red());
+                        }
+                    }
+                }
+                Err(_) => {
                     std::process::Command::new("echo")
                         .arg("\"Please set a config first using tindancer config set\"")
                         .spawn()
@@ -324,4 +359,12 @@ pub fn get_endpoint(cluster: String) -> String {
 pub struct ConfigSchema {
     pub log_path: String,
     pub cluster: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetSlotResponse {
+    pub jsonrpc: String,
+    pub result: i64,
+    pub id: i64,
 }
