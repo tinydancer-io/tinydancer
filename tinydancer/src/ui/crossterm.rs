@@ -1,4 +1,4 @@
-use crate::sampler::{get_serialized, GetShredResponse, SAMPLE_STATS};
+use crate::sampler::{get_serialized, GetShredResponse, SAMPLE_STATS, SLOT_STATS, VERIFIED_STATS};
 use crate::stats::{PerRequestSampleStats, PerRequestVerificationStats, SlotUpdateStats};
 use crate::tinydancer::{ClientService, Cluster, TinyDancer};
 use crate::ui::App;
@@ -11,6 +11,7 @@ use crossterm::{
 };
 use rocksdb::{IteratorMode, DB};
 use solana_sdk::blake3::hash;
+use tokio::sync::mpsc::UnboundedReceiver;
 use std::sync::Arc;
 use std::{any::Any, thread::Thread};
 use std::{
@@ -27,7 +28,9 @@ use tui::{
 };
 
 use super::draw;
-
+// let slot_stats = SLOT_STATS.to_owned();
+// let sample_stats = SAMPLE_STATS.to_owned();
+// let verified_stats = VERIFIED_STATS.to_owned();
 pub struct UiConfig {
     cluster: Cluster,
 }
@@ -102,7 +105,7 @@ pub fn display(
 
     // create app and run it
     let app = App::new("Sampler Statistics".to_string(), slot_list, r_list, v_list);
-    let res = run_app(&mut terminal, app, Duration::from_millis(1000));
+    let res = run_app(&mut terminal, app, Duration::from_millis(100));
 
     // restore terminal
     disable_raw_mode()?;
@@ -159,43 +162,68 @@ fn run_app<B: Backend>(
 pub async fn start_ui_loop(
     // db: &rocksdb::DB
     db: Arc<rocksdb::DB>,
+   ui_slot_update_rx: Receiver<usize>,
 ) {
-    loop {
-        println!("1");
+    if let Ok(slot) = ui_slot_update_rx.recv(){
+        loop {
+            println!("1");
 
-        let mut iter = db.raw_iterator();
-        println!("2");
-        let cfs = DB::list_cf(&rocksdb::Options::default(), "tmp/stats").unwrap_or(vec![]);
-        let cf_handle = db.cf_handle(SAMPLE_STATS).unwrap();
-        let key: usize = 1136638 as usize;
-        let s =
-            get_serialized::<Vec<(usize, usize, usize, usize)>>(&db, cf_handle, &key.to_le_bytes());
-        // println!("{:?} s", iter);
+            // let mut iter = db.iterator(IteratorMode::Start);
+            println!("2");
+            let cfs = DB::list_cf(&rocksdb::Options::default(), "/tmp/stats").unwrap_or(vec![]);
+            println!("COLUMN FAMILIES! => {:?}", cfs);
+            let slot_stats_cf = db.cf_handle(SLOT_STATS).unwrap();
+            let sample_stats_cf = db.cf_handle(SAMPLE_STATS).unwrap();
+            let verified_stats_cf = db.cf_handle(VERIFIED_STATS).unwrap();
 
-        break;
+                // Update: used a channel receiver here to get the slot update
+                // Im finally able to get a Ok(Some(<DB value>)) here.
+                let slot_key = slot - 1usize;
+            println!(" SLOTTT NO -> {:?}", slot);
+            let key = slot_key.to_le_bytes();
+            println!("HEY KEY {:?}", key);
+            let slot_u_stats = get_serialized::<Vec<usize>>(&db, slot_stats_cf, &key);
+            let sample_stats = get_serialized::<Vec<(usize, usize, usize, usize)>>(&db, sample_stats_cf, &key);
+            let verified_stats = get_serialized::<Vec<(usize, usize, usize)>>(&db, verified_stats_cf, &key);
+            println!("{:?} - {:?} - {:?} ", sample_stats, slot_u_stats, verified_stats );
+            //    if slot_u_stats.is_ok() && sample_stats.is_ok() && verified_stats.is_ok(){
+                    //if slot_u_stats.unwrap().is_some() && sample_stats.unwrap().is_some()  && verified_stats.unwrap().is_some() {
+                        display(
+                            slot_u_stats.unwrap().unwrap(), 
+                            sample_stats.unwrap().unwrap(),
+                            verified_stats.unwrap().unwrap(),
+                        );
+        
+                        
+        }
+}
+        // let slot_stat = &SLOT_STATS.to_owned();
+        // let sample_stats = &SAMPLE_STATS.to_owned();
+        // let verified_stats = &VERIFIED_STATS.to_owned();
+    
         // for item in iter {
         //     let (key, _) = item.unwrap();
-        //     println!("key {:?}", key);
+        //     println!("key {:?}", key.to_owned());
         //     println!("4");
         //     let stat_array = cfs
         //         .iter()
         //         .map(|cf| {
         //             let cf_handle = db.cf_handle(cf).unwrap();
         //             // let key = *key;
-        //             let o = match cf {
-        //                 SLOT_STATS => StatType::SlotStats(
+        //             let o = match cf_handle {
+        //                 slot_stat => StatType::SlotStats(
         //                     get_serialized::<Vec<usize>>(&db, cf_handle, &key)
         //                         .unwrap()
         //                         .unwrap(),
         //                 ),
-        //                 SAMPLE_STATS => StatType::SampleStats(
+        //                 sample_stats => StatType::SampleStats(
         //                     get_serialized::<Vec<(usize, usize, usize, usize)>>(
         //                         &db, cf_handle, &key,
         //                     )
         //                     .unwrap()
         //                     .unwrap(),
         //                 ),
-        //                 VERIFIED_STATS => StatType::VerifiedStats(
+        //                 verified_stats => StatType::VerifiedStats(
         //                     get_serialized::<Vec<(usize, usize, usize)>>(&db, cf_handle, &key)
         //                         .unwrap()
         //                         .unwrap(),
@@ -247,5 +275,5 @@ pub async fn start_ui_loop(
         //     display(slot_list[0].clone(), r_list[0].clone(), v_list[0].clone())
         //         .expect("TOTALLY FAILED");
         // }
-    }
+    
 }

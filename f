@@ -1,1 +1,1 @@
-RUST_LOG=info cargo r -r tinydancer
+RUST_LOG=info cargo r -r "/tmp"

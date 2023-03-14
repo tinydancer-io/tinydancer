@@ -84,12 +84,17 @@ impl ClientService<SampleServiceConfig> for SampleService {
             let (slot_db_tx, slot_db_rx) = crossbeam::channel::unbounded::<SlotUpdateStats>();
             let (slot_update_tx, slot_update_rx) = crossbeam::channel::unbounded::<u64>();
             let (shred_tx, shred_rx) = crossbeam::channel::unbounded();
-
+            let (ui_slot_update_tx, ui_slot_update_rx) = crossbeam::channel::unbounded::<usize>();
+            let (slot_tx, slot_rx) = crossbeam::channel::unbounded::<usize>();
             let (verified_shred_tx, verified_shred_rx) = crossbeam::channel::unbounded();
+            let (v_stats_update_tx, v_stats_update_rx) = crossbeam::channel::unbounded::<u64>();
             threads.push(tokio::spawn(slot_update_loop(
-                slot_update_tx,
+                slot_update_tx, // to 'shred_update_loop' to update the PerRequestSampleStats struct
                 pub_sub,
-                slot_db_tx,
+                slot_db_tx,// to 'store stats' function to use the slot as a key
+                ui_slot_update_tx, // to 'start_ui_loop' function
+                v_stats_update_tx, // to verifier loop for verified stats
+                slot_tx,
             )));
 
             let (per_req_tx, per_req_rx) = crossbeam::channel::unbounded::<PerRequestSampleStats>();
@@ -107,6 +112,7 @@ impl ClientService<SampleServiceConfig> for SampleService {
                 shred_rx,
                 verified_shred_tx,
                 verified_stats_tx,
+                v_stats_update_rx,
             )));
             if let Some(archive_config) = config.archive_config {
                 threads.push(tokio::spawn(shred_archiver(
@@ -120,7 +126,7 @@ impl ClientService<SampleServiceConfig> for SampleService {
             opts.create_missing_column_families(true);
             let instance = DB::open_cf(
                 &opts,
-                "tmp/stats",
+                "/tmp/stats",
                 vec![SLOT_STATS, SAMPLE_STATS, VERIFIED_STATS],
             )
             .unwrap();
@@ -136,8 +142,9 @@ impl ClientService<SampleServiceConfig> for SampleService {
                 per_req_rx,
                 verified_stats_rx,
                 store_instance,
+                slot_rx
             )));
-            threads.push(tokio::spawn(start_ui_loop(read_instance)));
+            threads.push(tokio::spawn(start_ui_loop(read_instance, ui_slot_update_rx)));
             for thread in threads {
                 thread.await;
             }
@@ -175,9 +182,12 @@ pub async fn request_shreds(
 }
 
 async fn slot_update_loop(
-    slot_update_tx: Sender<u64>,
+    slot_update_tx: Sender<u64>, // to shred update loop
     pub_sub: String,
-    slot_db_tx: Sender<SlotUpdateStats>,
+    slot_db_tx: Sender<SlotUpdateStats>, // to database for storing
+    ui_slot_update_tx: Sender<usize>, // to start_ui_loop
+    v_stats_update_tx: Sender<u64>, // to verifier loop for veridfied stats
+    slot_tx: Sender<usize>,
 ) {
     let (mut socket, _response) =
         connect(Url::parse(pub_sub.as_str()).unwrap()).expect("Can't connect to websocket");
@@ -193,15 +203,20 @@ async fn slot_update_loop(
                 let res = serde_json::from_str::<SlotSubscribeResponse>(msg.to_string().as_str());
                 // println!("res: {:?}", msg.to_string().as_str());
                 if let Ok(res) = res {
+                    ui_slot_update_tx.send(res.params.result.root as usize).expect("failed to send slot to ui loop!");
+                    slot_tx.send(res.params.result.root as usize).expect("FAILED AGAIN");
                     match slot_update_tx.send(res.params.result.root as u64) {
                         Ok(_) => {
                             // println!("slot updated: {:?}", res.params.result.root);
                             // report slot or root from the response?
                             slot_update_stats.slots = res.params.result.root as usize;
+                            
                             // slot_tx.send(res.params.result.root as u64).expect("failed to send update to verifier thread");
                             slot_db_tx
                                 .send(SlotUpdateStats::new(res.params.result.root as usize))
                                 .expect("failed");
+                            v_stats_update_tx.send(res.params.result.root as u64).expect("failed to send slot update to verifier loop for verified stats");
+                            println!("lol I sent it from here...{}", res.params.result.root);
                         }
                         Err(e) => {
                             println!("error here: {:?} {:?}", e, res.params.result.root as u64);
@@ -225,7 +240,6 @@ async fn shred_update_loop(
     loop {
         if let Ok(slot) = slot_update_rx.recv() {
             //let mut last_stats = Instant::now();
-            //Why don't we pass random indices here directly?
             let shred_for_one = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
             per_request_sample_stats.slot = slot;
             // println!("res {:?}", shred_for_one);
@@ -427,16 +441,17 @@ pub async fn shred_verify_loop(
     shred_rx: Receiver<(Vec<Option<Shred>>, solana_ledger::shred::Pubkey)>,
     verified_shred_tx: Sender<(Shred, solana_ledger::shred::Pubkey)>,
     verification_stats_tx: Sender<PerRequestVerificationStats>,
+    v_stats_update_rx: Receiver<u64>,
 ) {
     let mut sample_verification_stats = &mut PerRequestVerificationStats::default();
 
     loop {
         let rx = shred_rx.recv();
-        // let current_slot = slot_rx
-        //     .recv()
-        //     .expect("failed to receive slot update in verifier loop");
-        // let first = rx.unwrap().0[0].unwrap().slot();
-        let mut current_slot = 0u64;
+        let current_slot = v_stats_update_rx
+            .recv()
+            .expect("failed to receive slot update in verifier loop");
+       // let first = rx.unwrap().0[0].unwrap().slot();
+      //  let mut current_slot = 0u64;
         if let Ok((shreds, leader)) = rx {
             let ver_result = shreds
                 .par_iter()
@@ -543,14 +558,19 @@ pub fn get_serialized<T: DeserializeOwned>(
 ) -> Result<Option<T>, String> {
     match instance.get_cf(cf, key) {
         Ok(opt) => match opt {
-            Some(found) => match String::from_utf8(found) {
-                Ok(s) => match serde_json::from_str::<T>(&s) {
-                    Ok(t) => Ok(Some(t)),
-                    Err(err) => Err(format!("Failed to deserialize: {:?}", err)),
-                },
-                Err(err) => Err(format!("Failed to convert to String: {:?}", err)),
+            Some(found) => {
+                match String::from_utf8(found) {
+                    Ok(s) => match serde_json::from_str::<T>(&s) {
+                        Ok(t) => Ok(Some(t)),
+                        Err(err) => Err(format!("Failed to deserialize: {:?}", err)),
+                    },
+                    Err(err) => Err(format!("Failed to convert to String: {:?}", err)),
+                }
+        },
+            None => {
+               // println!(" susususus => ");
+                Ok(None)
             },
-            None => Ok(None),
         },
         Err(err) => Err(format!("Failed to get from ColumnFamily: {:?}", err)),
     }

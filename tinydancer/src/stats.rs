@@ -118,6 +118,7 @@ pub async fn store_stats(
     sample_stats_rx: Receiver<PerRequestSampleStats>,
     verified_stats_rx: Receiver<PerRequestVerificationStats>,
     instance: Arc<rocksdb::DB>,
+    slot_rx: Receiver<usize>,
 ) {
     loop {
         let (sx, rx, vx) = (
@@ -142,11 +143,13 @@ pub async fn store_stats(
                 vx.unwrap().num_failed,
             ));
 
-            let cf_one = instance.cf_handle(SLOT_STATS).unwrap();
+            let cf_one = instance.cf_handle(SLOT_STATS ).unwrap();
             let cf_two = instance.cf_handle(SAMPLE_STATS).unwrap();
             let cf_three = instance.cf_handle(VERIFIED_STATS).unwrap();
             println!("slot no: {:?}", &sx.unwrap().slots);
-            let key = &sx.unwrap().slots.to_le_bytes();
+            let key = &slot_rx.recv().expect("didn't get this").to_le_bytes();
+            println!("KEYYYYYYY - {:?}", key);
+            //println!("S_VEC -> {:?}", s_vec);
 
             let put_response_one = put_serialized(&instance, cf_one, key, &s_vec);
             let put_response_two = put_serialized(&instance, cf_two, key, &r_vec);
