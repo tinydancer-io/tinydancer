@@ -157,8 +157,8 @@ async fn main() -> Result<()> {
                     })
                 },
             };
-            let client = TinyDancer::new(config).await;
-            client.join().await;
+
+            TinyDancer::start(config).await.unwrap();
         }
 
         Commands::Slot => {

@@ -43,7 +43,9 @@ use tokio::{
 };
 use tungstenite::{connect, Message};
 use url::Url;
+
 pub const SHRED_CF: &str = "archived_shreds";
+
 pub struct SampleService {
     sample_indices: Vec<u64>,
     // peers: Vec<(Pubkey, SocketAddr)>,
@@ -59,27 +61,35 @@ pub struct SampleServiceConfig {
 #[derive(Clone, Debug)]
 pub struct ArchiveConfig {
     pub shred_archive_duration: u64,
-
     pub archive_path: String,
 }
+
 #[async_trait]
 impl ClientService<SampleServiceConfig> for SampleService {
     type ServiceError = tokio::task::JoinError;
+
     fn new(config: SampleServiceConfig) -> Self {
         let sampler_handle = tokio::spawn(async move {
             let rpc_url = endpoint(config.cluster);
             let pub_sub = convert_to_websocket!(rpc_url);
+
             let mut threads = Vec::default();
 
             let (slot_update_tx, slot_update_rx) = crossbeam::channel::unbounded::<u64>();
             let (shred_tx, shred_rx) = crossbeam::channel::unbounded();
             let (verified_shred_tx, verified_shred_rx) = crossbeam::channel::unbounded();
-            let status_arc = Arc::clone(&config.status_sampler);
+
+            let status_arc = config.status_sampler.clone();
+
+            // waits on new slots => triggers shred_update_loop
             threads.push(tokio::spawn(slot_update_loop(
                 slot_update_tx,
                 pub_sub,
                 config.status_sampler,
             )));
+
+            // sample shreds from new slot
+            // verify each shred in shred_verify_loop
             threads.push(tokio::spawn(shred_update_loop(
                 slot_update_rx,
                 rpc_url,
@@ -87,7 +97,9 @@ impl ClientService<SampleServiceConfig> for SampleService {
                 status_arc,
             )));
 
+            // verify shreds + store in db in shred_archiver
             threads.push(tokio::spawn(shred_verify_loop(shred_rx, verified_shred_tx)));
+
             if let Some(archive_config) = config.archive_config {
                 threads.push(tokio::spawn(shred_archiver(
                     verified_shred_rx,
@@ -95,27 +107,32 @@ impl ClientService<SampleServiceConfig> for SampleService {
                     config.instance,
                 )));
             }
+
             for thread in threads {
-                thread.await;
+                thread.await.unwrap();
             }
         });
+
         let sample_indices: Vec<u64> = Vec::default();
         Self {
             sampler_handle,
             sample_indices,
         }
     }
+
     async fn join(self) -> std::result::Result<(), Self::ServiceError> {
         self.sampler_handle.await
     }
 }
+
 pub fn gen_random_indices(max_shreds_per_slot: usize, sample_qty: usize) -> Vec<usize> {
     let mut rng = StdRng::from_entropy();
-    let vec = (0..max_shreds_per_slot)
+    let vec = (0..sample_qty)
         .map(|_| rng.gen_range(0..max_shreds_per_slot))
         .collect::<Vec<usize>>();
-    vec.as_slice()[0..sample_qty].to_vec()
+    vec
 }
+
 pub async fn request_shreds(
     slot: usize,
     indices: Vec<usize>,
@@ -205,6 +222,7 @@ async fn shred_update_loop(
         }
 
         if let Ok(slot) = slot_update_rx.recv() {
+            // get shred length
             let shred_for_one = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
             // info!("res {:?}", shred_for_one);
             let shred_indices_for_slot = match shred_for_one {
@@ -251,6 +269,8 @@ async fn shred_update_loop(
                     None
                 }
             };
+
+            // get a random sample of shreds
             info!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
             if let Some(shred_indices_for_slot) = shred_indices_for_slot.clone() {
                 let shreds_for_slot = request_shreds(
@@ -314,12 +334,14 @@ async fn shred_update_loop(
         }
     }
 }
+
 // use solana_ledger::shred::dispatch;
+
+// verifies the merkle proof of the shread 
 pub fn verify_sample(shred: &Shred, leader: solana_ledger::shred::Pubkey) -> bool {
     // @TODO fix error handling here
     let verify_merkle_root = match shred {
         Shred::ShredData(ShredData::Merkle(shred)) => Some(shred.verify_merkle_proof()),
-
         Shred::ShredCode(ShredCode::Merkle(shred)) => Some(shred.verify_merkle_proof()),
         _ => None,
     };
@@ -338,6 +360,7 @@ pub fn verify_sample(shred: &Shred, leader: solana_ledger::shred::Pubkey) -> boo
     .all(|s| *s);
     verified
 }
+
 pub async fn shred_verify_loop(
     shred_rx: Receiver<(Vec<Option<Shred>>, solana_ledger::shred::Pubkey)>,
     verified_shred_tx: Sender<(Shred, solana_ledger::shred::Pubkey)>,
@@ -373,6 +396,9 @@ pub async fn shred_verify_loop(
         }
     }
 }
+
+
+// store verified shreds in db
 pub async fn shred_archiver(
     verified_shred_rx: Receiver<(Shred, solana_ledger::shred::Pubkey)>,
     _archive_config: ArchiveConfig,
@@ -413,6 +439,8 @@ pub async fn shred_archiver(
         }
     }
 }
+
+
 pub async fn pull_and_verify_shreds(slot: usize, endpoint: String) -> bool {
     let shred_for_one = request_shreds(slot, vec![0], endpoint.clone()).await;
     // info!("res {:?}", shred_for_one);
@@ -522,6 +550,7 @@ pub async fn pull_and_verify_shreds(slot: usize, endpoint: String) -> bool {
         false
     }
 }
+
 pub fn put_serialized<T: serde::Serialize + std::fmt::Debug>(
     instance: &rocksdb::DB,
     cf: &ColumnFamily,

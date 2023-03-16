@@ -155,6 +155,7 @@ impl ClientService<TransactionServiceConfig> for TransactionService {
             tx_handle: transaction_handle,
         }
     }
+
     async fn join(self) -> std::result::Result<(), Self::ServiceError> {
         let _ = self.tx_handle.await;
         Ok(())

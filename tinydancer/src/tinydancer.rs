@@ -15,6 +15,8 @@ use crate::{
     ui::{UiConfig, UiService},
 };
 use async_trait::async_trait;
+use futures::future::join_all;
+use rand::seq::index::sample;
 use tiny_logger::logs::info;
 // use log::info;
 // use log4rs;
@@ -29,6 +31,7 @@ pub trait ClientService<T> {
     fn new(config: T) -> Self;
     async fn join(self) -> std::result::Result<(), Self::ServiceError>;
 }
+
 pub struct TinyDancer {
     sample_service: SampleService,
     ui_service: Option<UiService>,
@@ -36,6 +39,7 @@ pub struct TinyDancer {
     config: TinyDancerConfig,
     transaction_service: TransactionService,
 }
+
 #[derive(Clone)]
 pub struct TinyDancerConfig {
     pub rpc_endpoint: Cluster,
@@ -52,6 +56,7 @@ use std::fs::read_dir;
 use std::io;
 use std::io::ErrorKind;
 use std::path::PathBuf;
+
 // use tiny_logger::logs::info;
 pub fn get_project_root() -> io::Result<PathBuf> {
     let path = env::current_dir()?;
@@ -71,11 +76,13 @@ pub fn get_project_root() -> io::Result<PathBuf> {
         "Ran out of places to find Cargo.toml",
     ))
 }
+
 impl TinyDancer {
-    pub async fn new(config: TinyDancerConfig) -> Self {
+    pub async fn start(config: TinyDancerConfig) -> Result<()> {
         let status = ClientStatus::Initializing(String::from("Starting Up Tinydancer"));
+
         let client_status = Arc::new(Mutex::new(status));
-        let status_sampler = Arc::clone(&client_status);
+        let status_sampler = client_status.clone();
 
         let TinyDancerConfig {
             enable_ui_service,
@@ -87,33 +94,34 @@ impl TinyDancer {
         } = config.clone();
         std::env::set_var("RUST_LOG", "info");
         tiny_logger::setup_file_with_default(&log_path, "RUST_LOG");
-        let rpc_cluster = rpc_endpoint.clone();
 
         let mut opts = rocksdb::Options::default();
         opts.create_if_missing(true);
         opts.set_error_if_exists(false);
         opts.create_missing_column_families(true);
-        let instance = rocksdb::DB::open_cf(
+
+        // setup db
+        let db = rocksdb::DB::open_cf(
             &opts,
             archive_config.clone().unwrap().archive_path,
             vec![SHRED_CF],
         )
         .unwrap();
-        let instance = Arc::new(instance);
-        let sample_instance = Arc::clone(&instance);
+        let db = Arc::new(db);
 
-        let rpc_instance = Arc::clone(&instance);
         let sample_service_config = SampleServiceConfig {
-            cluster: rpc_endpoint,
+            cluster: rpc_endpoint.clone(),
             archive_config,
-            instance: sample_instance,
+            instance: db.clone(),
             status_sampler,
         };
         let sample_service = SampleService::new(sample_service_config);
+
         let transaction_service = TransactionService::new(TransactionServiceConfig {
-            cluster: rpc_cluster,
-            db_instance: rpc_instance,
+            cluster: rpc_endpoint.clone(),
+            db_instance: db.clone(),
         });
+
         let ui_service = if enable_ui_service {
             Some(UiService::new(UiConfig {
                 client_status,
@@ -130,26 +138,22 @@ impl TinyDancer {
             None
         };
 
-        Self {
-            config,
-            ui_service,
-            sample_qty,
-            sample_service,
-            transaction_service,
-        }
-    }
-    pub async fn join(self) {
-        self.sample_service
+        // run
+        sample_service
             .join()
             .await
             .expect("error in sample service thread");
-        self.transaction_service
+
+        transaction_service
             .join()
             .await
             .expect("ERROR IN SIMPLE PAYMENT SERVICE");
-        if let Some(ui_service) = self.ui_service {
+
+        if let Some(ui_service) = ui_service {
             block_on!(async { ui_service.join().await }, "Ui Service Error");
         }
+
+        Ok(())
     }
 }
 
@@ -161,6 +165,7 @@ pub enum Cluster {
     Localnet,
     Custom(String),
 }
+
 pub fn endpoint(cluster: Cluster) -> String {
     let cluster = cluster;
     match cluster {
