@@ -6,11 +6,11 @@ use std::{
 
 use dashmap::DashMap;
 use jsonrpsee::SubscriptionSink;
-use tiny_logger::logs::{info, warn};
 use prometheus::{
     core::GenericGauge, histogram_opts, opts, register_histogram, register_int_counter,
     register_int_gauge, Histogram, IntCounter,
 };
+use tiny_logger::logs::{info, warn};
 
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{
@@ -34,9 +34,7 @@ use tokio::{
     time::Instant,
 };
 
-use crate::rpc_wrapper::{
-    block_store::{BlockInformation, BlockStore},
-};
+use crate::rpc_wrapper::block_store::{BlockInformation, BlockStore};
 
 use super::{TxProps, TxSender};
 
@@ -213,7 +211,7 @@ impl BlockListener {
 
         let mut transactions_processed = 0;
         for tx in transactions {
-            let Some(UiTransactionStatusMeta { err, status, compute_units_consumed ,.. }) = tx.meta else {
+            let Some(UiTransactionStatusMeta { err, status, compute_units_consumed: _ ,.. }) = tx.meta else {
                 info!("tx with no meta");
                 continue;
             };
@@ -247,8 +245,6 @@ impl BlockListener {
                     err: err.clone(),
                     confirmation_status: Some(comfirmation_status.clone()),
                 });
-
-                
             };
 
             // subscribers
@@ -277,10 +273,7 @@ impl BlockListener {
 
         Ok(())
     }
-    pub fn listen(
-        self,
-        commitment_config: CommitmentConfig,
-    ) -> JoinHandle<anyhow::Result<()>> {
+    pub fn listen(self, commitment_config: CommitmentConfig) -> JoinHandle<anyhow::Result<()>> {
         let slots_task_queue = Arc::new(Mutex::new(VecDeque::<(u64, u8)>::new()));
         let (slot_retry_queue_sx, mut slot_retry_queue_rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -305,10 +298,7 @@ impl BlockListener {
                         }
                     };
 
-                    if let Err(_) = this
-                        .index_slot(slot, commitment_config)
-                        .await
-                    {
+                    if let Err(_) = this.index_slot(slot, commitment_config).await {
                         // usually as we index all the slots even if they are not been processed we get some errors for slot
                         // as they are not in long term storage of the rpc // we check 5 times before ignoring the slot
 

@@ -6,7 +6,6 @@ use std::{
     },
 };
 
-use tiny_logger::logs::info;
 use prometheus::{opts, register_int_counter, IntCounter};
 use solana_quic_client::{QuicConfig, QuicPool};
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
@@ -16,6 +15,7 @@ use solana_tpu_client::{
     tpu_client::TpuClientConfig,
     tpu_connection_cache::{NewTpuConfig, TpuConnectionCache},
 };
+use tiny_logger::logs::info;
 use tokio::sync::RwLock;
 
 pub type QuicTpuClient = TpuClient<QuicPool>;

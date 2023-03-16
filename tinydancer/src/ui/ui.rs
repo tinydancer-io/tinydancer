@@ -61,7 +61,7 @@ impl<T> StatefulList<T> {
     }
 
     fn next(&mut self) {
-        let i = match self.state.selected() {
+        let _i = match self.state.selected() {
             Some(i) => {
                 if i >= self.items.len() - 1 {
                     0
@@ -117,7 +117,7 @@ pub struct UiConfig {
 }
 // main draw function
 pub fn draw<B: Backend>(f: &mut Frame<B>) {
-    let chunks = Layout::default()
+    let _chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(
             [
@@ -148,11 +148,11 @@ where
     //ui(f, app, chunks[0]);
     draw_slot_list(f, app, chunks[0]);
 }
-fn draw_second_tab<B>(f: &mut Frame<B>, app: &mut App, area: Rect)
+fn draw_second_tab<B>(_f: &mut Frame<B>, _app: &mut App, area: Rect)
 where
     B: Backend,
 {
-    let chunks = Layout::default()
+    let _chunks = Layout::default()
         .constraints(
             [
                 Constraint::Length(20),

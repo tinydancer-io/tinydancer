@@ -55,12 +55,10 @@ use std::path::PathBuf;
 // use tiny_logger::logs::info;
 pub fn get_project_root() -> io::Result<PathBuf> {
     let path = env::current_dir()?;
-    let mut path_ancestors = path.as_path().ancestors();
+    let path_ancestors = path.as_path().ancestors();
 
-    while let Some(p) = path_ancestors.next() {
-        let has_cargo = read_dir(p)?
-            .into_iter()
-            .any(|p| p.unwrap().file_name() == OsString::from("Cargo.lock"));
+    for p in path_ancestors {
+        let has_cargo = read_dir(p)?.any(|p| p.unwrap().file_name() == *"Cargo.lock");
         if has_cargo {
             let mut path = PathBuf::from(p);
             // path.push("log");
@@ -164,12 +162,12 @@ pub enum Cluster {
     Custom(String),
 }
 pub fn endpoint(cluster: Cluster) -> String {
-    let cluster = cluster.clone();
+    let cluster = cluster;
     match cluster {
         Cluster::Mainnet => String::from("https://api.mainnet-beta.solana.com"),
         Cluster::Devnet => String::from("https://api.devnet.solana.com"),
         Cluster::Localnet => String::from("http://0.0.0.0:8899"),
-        Cluster::Custom(cluster) => cluster.to_string(),
+        Cluster::Custom(cluster) => cluster,
     }
 }
 pub enum ClientStatus {

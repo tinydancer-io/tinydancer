@@ -18,12 +18,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::rpc_wrapper::{
-    bridge::TXS_IN_CHANNEL,
-    tpu_manager::TpuManager,
-};
-
-
+use crate::rpc_wrapper::{bridge::TXS_IN_CHANNEL, tpu_manager::TpuManager};
 
 lazy_static::lazy_static! {
     static ref TXS_SENT: IntCounter =
@@ -97,7 +92,7 @@ impl TxSender {
             txs_sent.insert(sig.to_owned(), TxProps::default());
         }
 
-        let quic_response = match tpu_client.try_send_wire_transaction_batch(txs).await {
+        let _quic_response = match tpu_client.try_send_wire_transaction_batch(txs).await {
             Ok(_) => {
                 // metrics
                 TXS_SENT.inc_by(sigs_and_slots.len() as u64);
@@ -171,13 +166,11 @@ impl TxSender {
                     }
                 };
 
-                if txs.len() > 0 {
+                if !txs.is_empty() {
                     TX_BATCH_SIZES.set(txs.len() as i64);
                     let tx_sender = self.clone();
                     tokio::spawn(async move {
-                        tx_sender
-                            .forward_txs(sigs_and_slots, txs, permit)
-                            .await;
+                        tx_sender.forward_txs(sigs_and_slots, txs, permit).await;
                     });
                 }
             }

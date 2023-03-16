@@ -43,7 +43,7 @@ use tokio::{
 };
 use tungstenite::{connect, Message};
 use url::Url;
-pub const SHRED_CF: &'static str = &"archived_shreds";
+pub const SHRED_CF: &str = "archived_shreds";
 pub struct SampleService {
     sample_indices: Vec<u64>,
     // peers: Vec<(Pubkey, SocketAddr)>,
@@ -91,7 +91,7 @@ impl ClientService<SampleServiceConfig> for SampleService {
             if let Some(archive_config) = config.archive_config {
                 threads.push(tokio::spawn(shred_archiver(
                     verified_shred_rx,
-                    archive_config.clone(),
+                    archive_config,
                     config.instance,
                 )));
             }
@@ -114,7 +114,7 @@ pub fn gen_random_indices(max_shreds_per_slot: usize, sample_qty: usize) -> Vec<
     let vec = (0..max_shreds_per_slot)
         .map(|_| rng.gen_range(0..max_shreds_per_slot))
         .collect::<Vec<usize>>();
-    vec.as_slice()[0..(sample_qty as usize)].to_vec()
+    vec.as_slice()[0..sample_qty].to_vec()
 }
 pub async fn request_shreds(
     slot: usize,
@@ -128,7 +128,7 @@ pub async fn request_shreds(
         .to_string();
     let res = send_rpc_call!(endpoint, request);
     // info!("{:?}", res);
-    serde_json::from_str::<GetShredResponse>(res.to_string().as_str())
+    serde_json::from_str::<GetShredResponse>(res.as_str())
 }
 
 async fn slot_update_loop(
@@ -239,7 +239,7 @@ async fn shred_update_loop(
 
                     if let Some(max_shreds_per_slot) = max_shreds_per_slot {
                         let mut indices = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
-                        indices.push(0 as usize);
+                        indices.push(0_usize);
                         Some(indices)
                     } else {
                         None
@@ -335,7 +335,7 @@ pub fn verify_sample(shred: &Shred, leader: solana_ledger::shred::Pubkey) -> boo
         }
     }]
     .iter()
-    .all(|s| *s == true);
+    .all(|s| *s);
     verified
 }
 pub async fn shred_verify_loop(
@@ -375,7 +375,7 @@ pub async fn shred_verify_loop(
 }
 pub async fn shred_archiver(
     verified_shred_rx: Receiver<(Shred, solana_ledger::shred::Pubkey)>,
-    archive_config: ArchiveConfig,
+    _archive_config: ArchiveConfig,
     instance: Arc<rocksdb::DB>,
 ) {
     loop {
@@ -414,7 +414,7 @@ pub async fn shred_archiver(
     }
 }
 pub async fn pull_and_verify_shreds(slot: usize, endpoint: String) -> bool {
-    let shred_for_one = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
+    let shred_for_one = request_shreds(slot, vec![0], endpoint.clone()).await;
     // info!("res {:?}", shred_for_one);
     let shred_indices_for_slot = match shred_for_one {
         Ok(first_shred) => {
@@ -448,7 +448,7 @@ pub async fn pull_and_verify_shreds(slot: usize, endpoint: String) -> bool {
 
             if let Some(max_shreds_per_slot) = max_shreds_per_slot {
                 let mut indices = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
-                indices.push(0 as usize);
+                indices.push(0_usize);
                 Some(indices)
             } else {
                 None
@@ -462,12 +462,8 @@ pub async fn pull_and_verify_shreds(slot: usize, endpoint: String) -> bool {
     };
     info!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
     if let Some(shred_indices_for_slot) = shred_indices_for_slot.clone() {
-        let shreds_for_slot = request_shreds(
-            slot as usize,
-            shred_indices_for_slot.clone(),
-            endpoint.clone(),
-        )
-        .await;
+        let shreds_for_slot =
+            request_shreds(slot, shred_indices_for_slot.clone(), endpoint.clone()).await;
         // info!("made 2nd req: {:?}", shreds_for_slot);
         if let Ok(shreds_for_slot) = shreds_for_slot {
             info!("get shred for slot in 2nd req");
@@ -534,7 +530,7 @@ pub fn put_serialized<T: serde::Serialize + std::fmt::Debug>(
 ) -> Result<(), String> {
     match serde_json::to_string(&value) {
         Ok(serialized) => instance
-            .put_cf(cf, &key, serialized.into_bytes())
+            .put_cf(cf, key, serialized.into_bytes())
             .map_err(|err| format!("Failed to put to ColumnFamily:{:?}", err)),
         Err(err) => Err(format!(
             "Failed to serialize to String. T: {:?}, err: {:?}",
@@ -626,11 +622,11 @@ mod tests {
         opts.create_missing_column_families(true);
         let instance = DB::open_cf(&opts, "/tmp", vec![SHRED_CF]).unwrap();
         let slot: u64 = 1963754;
-        let index: u32 = 11;
+        let _index: u32 = 11;
         let key = hashv(&[
             &slot.to_le_bytes(),
             &u8::from(ShredType::Data).to_le_bytes(),
-            &u32::from(0 as u32).to_le_bytes(), // can be random
+            &0_u32.to_le_bytes(), // can be random
         ])
         .to_bytes();
         let cf = instance.cf_handle(SHRED_CF).unwrap();
