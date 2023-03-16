@@ -43,6 +43,7 @@ use tokio::{
 };
 use tungstenite::{connect, Message};
 use url::Url;
+use anyhow::anyhow;
 
 pub const SHRED_CF: &str = "archived_shreds";
 
@@ -145,7 +146,7 @@ pub async fn request_shreds(
             "params":[
                 slot,
                 indices,
-                { "commitment": "confirmed"}
+                { "commitment": "confirmed" }
             ]
         }) // getting one shred just to get max shreds per slot, can maybe randomize the selection here
         .to_string();
@@ -200,28 +201,120 @@ async fn slot_update_loop(
     }
 }
 
-macro_rules! unwrap_or_continue {
+macro_rules! unwrap_or_return {
     (Result $var:ident) => {
-        if $var.is_err() { 
-            continue;
+        if let Err(e) = $var { 
+            return Err(e.into());
         } else { 
             $var.unwrap()
         }
     };
-    (Option $var:ident) => {
+    (Option $var:ident $err:expr) => {
         if $var.is_none() { 
-            continue;
+            return Err(anyhow!($err));
         } else { 
             $var.unwrap()
         }
     };
-    (OptionRef $var:ident) => {
+    (OptionRef $var:ident $err:expr) => {
         if $var.is_none() { 
-            continue;
+            return Err(anyhow!($err));
         } else { 
             $var.as_ref().unwrap()
         }
     };
+}
+
+async fn get_shreds_and_leader_for_slot(
+    slot: u64,
+    endpoint: &String
+) -> anyhow::Result<(Vec<Option<Shred>>, Pubkey)> { 
+
+    // get shred length (max_shreds_per_slot)
+    let first_shred = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
+    let first_shred = unwrap_or_return!(Result first_shred);
+
+    let first_shred = &first_shred.result.shreds[1]; 
+    let first_shred = unwrap_or_return!(OptionRef first_shred "first shred not found");
+
+    let max_shreds_per_slot = {
+        if let Some(data_shred) = &first_shred.shred_data { 
+            Shred::ShredData(data_shred.clone())
+                .num_data_shreds()
+                .expect("num data shreds error")
+        } else if let Some(code_shred) = &first_shred.shred_code { 
+            Shred::ShredCode(code_shred.clone())
+                    .num_coding_shreds()
+                    .expect("num code shreds error")
+        } else {
+            // todo
+            return Err(anyhow!("shred isnt either data or code type"));
+        }
+    };
+
+    // get a random sample of shreds
+    let mut shred_indices_for_slot = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
+    shred_indices_for_slot.push(0_usize);
+    info!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
+
+    let shreds_for_slot = request_shreds(
+        slot as usize,
+        shred_indices_for_slot.clone(),
+        endpoint.clone(),
+    )
+    .await;
+    let shreds_for_slot = unwrap_or_return!(Result shreds_for_slot);
+
+    info!("get shred for slot in 2nd req");
+    let mut shreds: Vec<Option<Shred>> = shreds_for_slot
+        .result
+        .shreds
+        .par_iter()
+        .map(|s| try_coerce_shred!(s))
+        .collect();
+
+    // info!("before leader");
+    let leader = solana_ledger::shred::Pubkey::from_str(
+        shreds_for_slot.result.leader.as_str(),
+    )?;
+
+    // info!("leader {:?}", leader);
+    let mut fullfill_count = AtomicU32::new(0u32);
+    shreds.dedup();
+    shreds.iter().for_each(|f| {
+        if let Some(s) = f {
+            info!("{:?}", s.index());
+        }
+    });
+
+    shreds.par_iter().for_each(|s| {
+        if let Some(s) = s {
+            match shred_indices_for_slot.contains(&(s.index() as usize)) {
+                true => {
+                    fullfill_count.fetch_add(1, Ordering::Relaxed);
+                    info!(
+                        "Received requested shred: {:?} for slot: {:?}",
+                        s.index(),
+                        s.slot()
+                    )
+                }
+                false => info!(
+                    "Received unrequested shred index: {:?} for slot: {:?}",
+                    s.index(),
+                    s.slot()
+                ),
+            }
+        } else {
+            info!("Received empty")
+        }
+    });
+
+    if (fullfill_count.get_mut().to_owned() as usize) < shred_indices_for_slot.len()
+    {
+        info!("Received incomplete number of shreds, requested {:?} shreds for slot {:?} and received {:?}", shred_indices_for_slot.len(),slot, fullfill_count);
+    }
+
+    Ok((shreds, leader))
 }
 
 async fn shred_update_loop(
@@ -242,89 +335,12 @@ async fn shred_update_loop(
         }
 
         if let Ok(slot) = slot_update_rx.recv() {
-            // get shred length (max_shreds_per_slot)
-            let first_shred = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
-            let first_shred = unwrap_or_continue!(Result first_shred);
-
-            let first_shred = &first_shred.result.shreds[1]; 
-            let first_shred = unwrap_or_continue!(OptionRef first_shred);
-
-            let max_shreds_per_slot = {
-                if let Some(data_shred) = &first_shred.shred_data { 
-                    Shred::ShredData(data_shred.clone())
-                        .num_data_shreds()
-                        .expect("num data shreds error")
-                } else if let Some(code_shred) = &first_shred.shred_code { 
-                    Shred::ShredCode(code_shred.clone())
-                            .num_coding_shreds()
-                            .expect("num code shreds error")
-                } else {
-                    // todo
-                    continue;
-                }
-            };
-
-            // get a random sample of shreds
-            let mut shred_indices_for_slot = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
-            shred_indices_for_slot.push(0_usize);
-            info!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
-
-            let shreds_for_slot = request_shreds(
-                slot as usize,
-                shred_indices_for_slot.clone(),
-                endpoint.clone(),
-            )
-            .await;
-            let shreds_for_slot = unwrap_or_continue!(Result shreds_for_slot);
-
-            info!("get shred for slot in 2nd req");
-            let mut shreds: Vec<Option<Shred>> = shreds_for_slot
-                .result
-                .shreds
-                .par_iter()
-                .map(|s| try_coerce_shred!(s))
-                .collect();
-
-            // info!("before leader");
-            let leader = solana_ledger::shred::Pubkey::from_str(
-                shreds_for_slot.result.leader.as_str(),
-            )?;
-
-            // info!("leader {:?}", leader);
-            let mut fullfill_count = AtomicU32::new(0u32);
-            shreds.dedup();
-            shreds.iter().for_each(|f| {
-                if let Some(s) = f {
-                    info!("{:?}", s.index());
-                }
-            });
-
-            shreds.par_iter().for_each(|s| {
-                if let Some(s) = s {
-                    match shred_indices_for_slot.contains(&(s.index() as usize)) {
-                        true => {
-                            fullfill_count.fetch_add(1, Ordering::Relaxed);
-                            info!(
-                                "Received requested shred: {:?} for slot: {:?}",
-                                s.index(),
-                                s.slot()
-                            )
-                        }
-                        false => info!(
-                            "Received unrequested shred index: {:?} for slot: {:?}",
-                            s.index(),
-                            s.slot()
-                        ),
-                    }
-                } else {
-                    info!("Received empty")
-                }
-            });
-
-            if (fullfill_count.get_mut().to_owned() as usize) < shred_indices_for_slot.len()
-            {
-                info!("Received incomplete number of shreds, requested {:?} shreds for slot {:?} and received {:?}", shred_indices_for_slot.len(),slot, fullfill_count);
+            let shreds = get_shreds_and_leader_for_slot(slot, &endpoint).await;
+            if let Err(e) = shreds { 
+                info!("{}", e);
+                continue;
             }
+            let (shreds, leader) = shreds.unwrap();
 
             shred_tx
                 .send((shreds, leader))
@@ -364,9 +380,7 @@ pub async fn shred_verify_loop(
     verified_shred_tx: Sender<(Shred, solana_ledger::shred::Pubkey)>,
 ) -> anyhow::Result<()> {
     loop {
-        let rx = shred_rx.recv();
-
-        if let Ok((shreds, leader)) = rx {
+        if let Ok((shreds, leader)) = shred_rx.recv() {
             shreds.par_iter().for_each(|sh| match sh {
                 Some(shred) => {
                     let verified = verify_sample(shred, leader);
@@ -386,11 +400,11 @@ pub async fn shred_verify_loop(
                     }
                 }
                 None => {
-                    info!("none")
+                    // info!("none")
                 }
             });
         } else {
-            info!("None")
+            // info!("None")
         }
     }
 }
@@ -440,113 +454,20 @@ pub async fn shred_archiver(
 
 
 pub async fn pull_and_verify_shreds(slot: usize, endpoint: String) -> bool {
-    let shred_for_one = request_shreds(slot, vec![0], endpoint.clone()).await;
-    // info!("res {:?}", shred_for_one);
-    let shred_indices_for_slot = match shred_for_one {
-        Ok(first_shred) => {
-            let first_shred = &first_shred.result.shreds[1].clone(); // add some check later
-
-            let max_shreds_per_slot = if let Some(first_shred) = first_shred {
-                match (
-                    first_shred.clone().shred_data,
-                    first_shred.clone().shred_code,
-                ) {
-                    (Some(data_shred), None) => {
-                        Some(
-                            Shred::ShredData(data_shred)
-                                .num_data_shreds()
-                                .expect("num data shreds error"),
-                        )
-                        // Some(data_shred. ().expect("num data shreds error"))
-                    }
-                    (None, Some(coding_shred)) => Some(
-                        Shred::ShredCode(coding_shred)
-                            .num_coding_shreds()
-                            .expect("num code shreds error"),
-                    ),
-                    _ => None,
-                }
-            } else {
-                info!("shred: {:?}", first_shred);
-                None
-            };
-            info!("max_shreds_per_slot {:?}", max_shreds_per_slot);
-
-            if let Some(max_shreds_per_slot) = max_shreds_per_slot {
-                let mut indices = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
-                indices.push(0_usize);
-                Some(indices)
-            } else {
-                None
-            }
-        }
-        Err(_) => {
-            //@TODO: add logger here
-
-            None
-        }
-    };
-    info!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
-    if let Some(shred_indices_for_slot) = shred_indices_for_slot.clone() {
-        let shreds_for_slot =
-            request_shreds(slot, shred_indices_for_slot.clone(), endpoint.clone()).await;
-        // info!("made 2nd req: {:?}", shreds_for_slot);
-        if let Ok(shreds_for_slot) = shreds_for_slot {
-            info!("get shred for slot in 2nd req");
-            let mut shreds: Vec<Option<Shred>> = shreds_for_slot
-                .result
-                .shreds
-                .par_iter()
-                .map(|s| try_coerce_shred!(s))
-                .collect();
-            // info!("before leader");
-            let leader =
-                solana_ledger::shred::Pubkey::from_str(shreds_for_slot.result.leader.as_str())
-                    .unwrap();
-            // info!("leader {:?}", leader);
-            let mut fullfill_count = AtomicU32::new(0u32);
-            shreds.dedup();
-            shreds.iter().for_each(|f| {
-                if let Some(s) = f {
-                    info!("{:?}", s.index());
-                }
-            });
-            shreds.par_iter().for_each(|s| {
-                if let Some(s) = s {
-                    match shred_indices_for_slot.contains(&(s.index() as usize)) {
-                        true => {
-                            fullfill_count.fetch_add(1, Ordering::Relaxed);
-                            info!(
-                                "Received requested shred: {:?} for slot: {:?}",
-                                s.index(),
-                                s.slot()
-                            )
-                        }
-                        false => info!(
-                            "Received unrequested shred index: {:?} for slot: {:?}",
-                            s.index(),
-                            s.slot()
-                        ),
-                    }
-                } else {
-                    info!("Received empty")
-                }
-            });
-            if (fullfill_count.get_mut().to_owned() as usize) < shred_indices_for_slot.len() {
-                info!("Received incomplete number of shreds, requested {:?} shreds for slot {:?} and received {:?}", shred_indices_for_slot.len(),slot, fullfill_count);
-            }
-            let sampled = shreds
-                .par_iter()
-                .flatten()
-                .all(|s| verify_sample(s, leader));
-            info!("pull and verify {:?}", sampled);
-            sampled
-        } else {
-            false
-        }
-    } else {
-        false
+    let shreds = get_shreds_and_leader_for_slot(slot as u64, &endpoint).await;
+    if let Err(e) = shreds { 
+        info!("{}", e);
+        return false;
     }
+    let (shreds, leader) = shreds.unwrap();
+
+    let sampled = shreds
+        .par_iter()
+        .flatten()
+        .all(|s| verify_sample(s, leader));
+
+    info!("pull and verify {:?}", sampled);
+    sampled
 }
 
 pub fn put_serialized<T: serde::Serialize + std::fmt::Debug>(

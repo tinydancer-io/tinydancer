@@ -14,14 +14,15 @@ use crate::{
     sampler::{ArchiveConfig, SampleService, SampleServiceConfig, SHRED_CF},
     ui::{UiConfig, UiService},
 };
+use anyhow::anyhow;
 use async_trait::async_trait;
-use futures::future::join_all;
+use futures::{future::join_all, TryFutureExt};
 use rand::seq::index::sample;
 use tiny_logger::logs::info;
 // use log::info;
 // use log4rs;
 use std::error::Error;
-use tokio::{runtime::Runtime, task::JoinError};
+use tokio::{runtime::Runtime, task::JoinError, try_join};
 // use std::{thread, thread::JoinHandle, time::Duration};
 
 #[async_trait]

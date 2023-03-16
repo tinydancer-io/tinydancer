@@ -212,7 +212,7 @@ async fn main() -> Result<()> {
                 }
                 sleep(Duration::from_secs(1));
 
-                let config_path = tinydancer_dir + "./config.json";
+                let config_path = tinydancer_dir + "/config.json";
                 let path = Path::new(&config_path);
                 if !path.exists() {
                     std::process::Command::new("touch")
