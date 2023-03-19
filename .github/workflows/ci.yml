@@ -41,8 +41,8 @@ jobs:
           override: true
 
       - name: Publish to crates.io
-        uses: nadock/verified_commits_check@v1
-        if: "contains(github.event.commits[0].message,'DEPLOY') && contains(github.event.commits[0].author.name, 'anoushk1234')"
+        if: ${{CRATES_DEPLOY}}
         run: cargo publish -p tinydancer --token ${CRATES_TOKEN} --no-verify
         env:
+          CRATES_DEPLOY: ${{ secrets.CRATES_DEPLOY }}
           CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
