@@ -30,6 +30,7 @@ jobs:
     steps:
       - name: Check semver
         uses: obi1kenobi/cargo-semver-checks
+
       - name: Checkout sources
         uses: actions/checkout@v2
 
@@ -41,7 +42,7 @@ jobs:
           override: true
 
       - name: Publish to crates.io
-        if: ${{CRATES_DEPLOY}}
+        # if: ${{CRATES_DEPLOY}}
         run: cargo publish -p tinydancer --token ${CRATES_TOKEN} --no-verify
         env:
           CRATES_DEPLOY: ${{ secrets.CRATES_DEPLOY }}
