@@ -27,7 +27,6 @@ jobs:
   check_and_publish:
     name: Check semver and publish to crates.io
     runs-on: ubuntu-latest
-    if: ${{ secrets.CRATES_DEPLOY }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -48,6 +47,9 @@ jobs:
           toolchain: nightly
           override: true
 
-      - run: cargo publish -p tinydancer --token ${CRATES_TOKEN} --no-verify
+      - name: Publish to crates.io
+        if: ${{CRATES_DEPLOY}}
+        run: cargo publish -p tinydancer --token ${CRATES_TOKEN} --no-verify
         env:
+          CRATES_DEPLOY: ${{ secrets.CRATES_DEPLOY }}
           CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
