@@ -27,12 +27,21 @@ jobs:
   check_and_publish:
     name: Check semver and publish to crates.io
     runs-on: ubuntu-latest
+    if: ${{CRATES_DEPLOY}}
+    env:
+      CRATES_DEPLOY: ${{ secrets.CRATES_DEPLOY }}
     steps:
-      - name: Check semver
-        uses: obi1kenobi/cargo-semver-checks
-
       - name: Checkout sources
         uses: actions/checkout@v2
+
+      - name: Install cargo-semver-checks
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks
+
+      - name: Check semver compatibility
+        run: |
+          cargo semver-checks check-release --release-type minor
 
       - name: Install Nightly toolchain
         uses: actions-rs/toolchain@v1
@@ -43,5 +52,4 @@ jobs:
 
       - run: cargo publish -p tinydancer --token ${CRATES_TOKEN} --no-verify
         env:
-          CRATES_DEPLOY: ${{ secrets.CRATES_DEPLOY }}
           CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
