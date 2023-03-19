@@ -27,9 +27,7 @@ jobs:
   check_and_publish:
     name: Check semver and publish to crates.io
     runs-on: ubuntu-latest
-    if: ${{CRATES_DEPLOY}}
-    env:
-      CRATES_DEPLOY: ${{ secrets.CRATES_DEPLOY }}
+    if: ${{ secrets.CRATES_DEPLOY }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
