@@ -5,7 +5,7 @@ on:
 name: Publish to crates.io
 
 env:
-  CRATES_DEPLOY: true
+  CRATES_DEPLOY: false
 
 jobs:
   build_and_test:
