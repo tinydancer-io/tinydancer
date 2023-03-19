@@ -48,7 +48,7 @@ jobs:
           override: true
 
       - name: Publish to crates.io
-        if: ${{CRATES_DEPLOY}}
+        if: $CRATES_DEPLOY
         run: cargo publish -p tinydancer --token ${CRATES_TOKEN} --no-verify
         env:
           CRATES_DEPLOY: ${{ secrets.CRATES_DEPLOY }}
