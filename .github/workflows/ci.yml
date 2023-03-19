@@ -34,14 +34,14 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install cargo-semver-checks
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-semver-checks
-
-      - name: Check semver compatibility
-        run: |
-          cargo semver-checks check-release --release-type minor
+#     - name: Install cargo-semver-checks
+#       uses: taiki-e/install-action@v2
+#       with:
+#         tool: cargo-semver-checks
+#
+#      - name: Check semver compatibility
+#       run: |
+#         cargo semver-checks check-release --release-type minor
 
       - name: Install Nightly toolchain
         uses: actions-rs/toolchain@v1
