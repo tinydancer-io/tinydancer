@@ -1,0 +1,25 @@
+{
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "commitConvention": "angular",
+  "contributors": [
+    {
+      "login": "0xNineteen",
+      "name": "x19",
+      "avatar_url": "https://avatars.githubusercontent.com/u/100000306?v=4",
+      "profile": "https://github.com/0xNineteen",
+      "contributions": [
+        "code"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7,
+  "skipCi": true,
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "projectName": "half-baked-client",
+  "projectOwner": "tinydancer-io"
+}
