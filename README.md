@@ -1,4 +1,7 @@
 # Tinydancer (V0)
+<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
+[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+<!-- ALL-CONTRIBUTORS-BADGE:END -->
 [![All Contributors](https://img.shields.io/github/all-contributors/anoushk1234/half-baked-client?color=ee8449&style=flat-square)](#contributors)
 
 ## Architecture
@@ -22,6 +25,20 @@ cargo install --git https://github.com/tinydancer-io/half-baked-client tinydance
 ## Contributors
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/0xNineteen"><img src="https://avatars.githubusercontent.com/u/100000306?v=4?s=100" width="100px;" alt="x19"/><br /><sub><b>x19</b></sub></a><br /><a href="https://github.com/tinydancer-io/half-baked-client/commits?author=0xNineteen" title="Code">💻</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
 <!-- prettier-ignore-start -->
 <!-- markdownlint-disable -->
 
