@@ -2,7 +2,6 @@
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
 [![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
-[![All Contributors](https://img.shields.io/github/all-contributors/anoushk1234/half-baked-client?color=ee8449&style=flat-square)](#contributors)
 
 ## Architecture
 The client is designed to be modular and easily extensible for additional functionality as this is the v0 and with every major version there may be a need for major changes and add-on services.
