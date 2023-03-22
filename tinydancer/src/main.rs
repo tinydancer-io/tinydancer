@@ -125,7 +125,6 @@ pub fn get_config_file() -> Result<ConfigSchema> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    tracing_subscriber::fmt::init();
 
     match args.command {
         Commands::Logs { log_path } => {
