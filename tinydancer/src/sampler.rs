@@ -108,7 +108,7 @@ impl ClientService<SampleServiceConfig> for SampleService {
             )));
 
             for thread in threads {
-                thread.await.unwrap().unwrap();
+                thread.await;
             }
         });
 
@@ -159,14 +159,19 @@ async fn slot_update_loop(
     pub_sub: String,
     status_sampler: Arc<Mutex<ClientStatus>>,
 ) -> anyhow::Result<()> {
-    let (mut socket, _response) = match connect(Url::parse(pub_sub.as_str()).unwrap()) {
+    let result = match connect(Url::parse(pub_sub.as_str()).unwrap()) {
         Ok((socket, _response)) => Some((socket, _response)),
         Err(_) => {
             let mut status = status_sampler.lock().unwrap();
             *status = ClientStatus::Crashed(String::from("Client can't connect to socket"));
             None
         }
-    }.unwrap(); 
+    }; 
+    
+    if result.is_none() { 
+        return Err(anyhow!(""));
+    }
+    let (mut socket, _response) = result.unwrap();
 
     socket.write_message(Message::Text(
         r#"{ "jsonrpc": "2.0", "id": 1, "method": "slotSubscribe" }"#.into(),
@@ -324,8 +329,9 @@ async fn shred_update_loop(
     loop {
         {
             let mut status = status_sampler.lock().unwrap();
-
-            if let ClientStatus::Crashed(_) = &*status { } else {
+            if let ClientStatus::Crashed(_) = &*status { 
+                return Err(anyhow!(""));
+            } else {
                 *status = ClientStatus::Active(String::from(
                     "Monitoring Tinydancer: Actively Sampling Shreds",
                 ));
