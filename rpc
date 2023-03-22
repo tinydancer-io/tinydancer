@@ -1,0 +1,7 @@
+#!/bin/bash
+
+ssh debian@45.250.255.91 "cd diet-rpc-validator && ./v"
+
+ssh -f -T -N -L 8899:0.0.0.0:8899 debian@45.250.255.91
+
+ssh -f -T -N -L 8900:0.0.0.0:8900 debian@45.250.255.91
