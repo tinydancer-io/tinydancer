@@ -54,7 +54,7 @@ pub struct SampleService {
 }
 pub struct SampleServiceConfig {
     pub cluster: Cluster,
-    pub archive_config: Option<ArchiveConfig>,
+    pub archive_config: ArchiveConfig,
     pub instance: Arc<rocksdb::DB>,
     pub status_sampler: Arc<Mutex<ClientStatus>>,
 }
@@ -101,13 +101,11 @@ impl ClientService<SampleServiceConfig> for SampleService {
             // verify shreds + store in db in shred_archiver
             threads.push(tokio::spawn(shred_verify_loop(shred_rx, verified_shred_tx)));
 
-            if let Some(archive_config) = config.archive_config {
-                threads.push(tokio::spawn(shred_archiver(
-                    verified_shred_rx,
-                    archive_config,
-                    config.instance,
-                )));
-            }
+            threads.push(tokio::spawn(shred_archiver(
+                verified_shred_rx,
+                config.archive_config,
+                config.instance,
+            )));
 
             for thread in threads {
                 thread.await.unwrap().unwrap();

@@ -46,7 +46,7 @@ pub struct TinyDancerConfig {
     pub rpc_endpoint: Cluster,
     pub sample_qty: u64,
     pub enable_ui_service: bool,
-    pub archive_config: Option<ArchiveConfig>,
+    pub archive_config: ArchiveConfig,
     pub tui_monitor: bool,
     pub log_path: String,
 }
@@ -104,7 +104,7 @@ impl TinyDancer {
         // setup db
         let db = rocksdb::DB::open_cf(
             &opts,
-            archive_config.clone().unwrap().archive_path,
+            archive_config.clone().archive_path,
             vec![SHRED_CF],
         )
         .unwrap();

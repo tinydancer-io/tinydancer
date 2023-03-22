@@ -151,10 +151,10 @@ async fn main() -> Result<()> {
                 tui_monitor,
                 log_path: config_file.log_path,
                 archive_config: {
-                    archive_path.map(|path| ArchiveConfig {
+                    archive_path.map(|path| Ok(ArchiveConfig {
                         shred_archive_duration,
                         archive_path: path,
-                    })
+                    })).unwrap_or(Err(anyhow!("shred path not provided...")))?
                 },
             };
 
