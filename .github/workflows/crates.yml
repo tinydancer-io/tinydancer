@@ -1,13 +1,34 @@
 on:
   push:
-    # Pattern matched against refs/tags
     branch: ["master"]
 
 name: Publish to crates.io
 
+env:
+  CRATES_DEPLOY: false
+
 jobs:
-  publish:
-    name: Publish
+  build_and_test:
+    name: Build the client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Nightly toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+
+      - run: rustup toolchain list
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --all-features
+
+  check_and_publish:
+    name: Check semver and publish to crates.io
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -20,6 +41,9 @@ jobs:
           toolchain: nightly
           override: true
 
-      - run: cargo publish -p tinydancer --token ${CRATES_TOKEN} --no-verify
+      - name: Publish to crates.io
+        if: "contains(${{ env.CRATES_DEPLOY }},'true')"
+        run: cargo publish -p tinydancer --token ${CRATES_TOKEN} --no-verify
         env:
+          CRATES_DEPLOY: ${{ secrets.CRATES_DEPLOY }}
           CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
