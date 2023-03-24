@@ -47,7 +47,7 @@ async fn main() {
 
         archive_config: Some(ArchiveConfig {
             shred_archive_duration: 1000000,
-            archive_path: "tmp/shreds".to_string(),
+            archive_path: "/tmp/shreds".to_string(),
         }),
     };
     let client = TinyDancer::new(config).await;
