@@ -4,12 +4,12 @@ use std::time::Duration;
 use anyhow::Context;
 use dashmap::DashMap;
 
-use tiny_logger::logs::info;
 use prometheus::core::GenericGauge;
 use prometheus::{opts, register_int_gauge};
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig};
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::TransactionDetails;
+use tiny_logger::logs::info;
 use tokio::sync::RwLock;
 use tokio::time::Instant;
 lazy_static::lazy_static! {

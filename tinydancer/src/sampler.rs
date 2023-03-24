@@ -43,7 +43,10 @@ use tokio::{
 };
 use tungstenite::{connect, Message};
 use url::Url;
-pub const SHRED_CF: &'static str = &"archived_shreds";
+use anyhow::anyhow;
+
+pub const SHRED_CF: &str = "archived_shreds";
+
 pub struct SampleService {
     sample_indices: Vec<u64>,
     // peers: Vec<(Pubkey, SocketAddr)>,
@@ -51,7 +54,7 @@ pub struct SampleService {
 }
 pub struct SampleServiceConfig {
     pub cluster: Cluster,
-    pub archive_config: Option<ArchiveConfig>,
+    pub archive_config: ArchiveConfig,
     pub instance: Arc<rocksdb::DB>,
     pub status_sampler: Arc<Mutex<ClientStatus>>,
 }
@@ -59,27 +62,35 @@ pub struct SampleServiceConfig {
 #[derive(Clone, Debug)]
 pub struct ArchiveConfig {
     pub shred_archive_duration: u64,
-
     pub archive_path: String,
 }
+
 #[async_trait]
 impl ClientService<SampleServiceConfig> for SampleService {
     type ServiceError = tokio::task::JoinError;
+
     fn new(config: SampleServiceConfig) -> Self {
         let sampler_handle = tokio::spawn(async move {
             let rpc_url = endpoint(config.cluster);
             let pub_sub = convert_to_websocket!(rpc_url);
+
             let mut threads = Vec::default();
 
             let (slot_update_tx, slot_update_rx) = crossbeam::channel::unbounded::<u64>();
             let (shred_tx, shred_rx) = crossbeam::channel::unbounded();
             let (verified_shred_tx, verified_shred_rx) = crossbeam::channel::unbounded();
-            let status_arc = Arc::clone(&config.status_sampler);
+
+            let status_arc = config.status_sampler.clone();
+
+            // waits on new slots => triggers shred_update_loop
             threads.push(tokio::spawn(slot_update_loop(
                 slot_update_tx,
                 pub_sub,
                 config.status_sampler,
             )));
+
+            // sample shreds from new slot
+            // verify each shred in shred_verify_loop
             threads.push(tokio::spawn(shred_update_loop(
                 slot_update_rx,
                 rpc_url,
@@ -87,101 +98,226 @@ impl ClientService<SampleServiceConfig> for SampleService {
                 status_arc,
             )));
 
+            // verify shreds + store in db in shred_archiver
             threads.push(tokio::spawn(shred_verify_loop(shred_rx, verified_shred_tx)));
-            if let Some(archive_config) = config.archive_config {
-                threads.push(tokio::spawn(shred_archiver(
-                    verified_shred_rx,
-                    archive_config.clone(),
-                    config.instance,
-                )));
-            }
+
+            threads.push(tokio::spawn(shred_archiver(
+                verified_shred_rx,
+                config.archive_config,
+                config.instance,
+            )));
+
             for thread in threads {
                 thread.await;
             }
         });
+
         let sample_indices: Vec<u64> = Vec::default();
         Self {
             sampler_handle,
             sample_indices,
         }
     }
+
     async fn join(self) -> std::result::Result<(), Self::ServiceError> {
         self.sampler_handle.await
     }
 }
+
 pub fn gen_random_indices(max_shreds_per_slot: usize, sample_qty: usize) -> Vec<usize> {
     let mut rng = StdRng::from_entropy();
-    let vec = (0..max_shreds_per_slot)
+    let vec = (0..sample_qty)
         .map(|_| rng.gen_range(0..max_shreds_per_slot))
         .collect::<Vec<usize>>();
-    vec.as_slice()[0..(sample_qty as usize)].to_vec()
+    vec
 }
+
 pub async fn request_shreds(
     slot: usize,
     indices: Vec<usize>,
     endpoint: String,
 ) -> Result<GetShredResponse, serde_json::Error> {
-    let request =
-        serde_json::json!(  {"jsonrpc": "2.0","id":1,"method":"getShreds","params":[slot,&indices,{
-          "commitment": "confirmed"
-        }]}) // getting one shred just to get max shreds per slot, can maybe randomize the selection here
+    let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getShreds",
+            "params":[
+                slot,
+                indices,
+                { "commitment": "confirmed" }
+            ]
+        }) // getting one shred just to get max shreds per slot, can maybe randomize the selection here
         .to_string();
+
     let res = send_rpc_call!(endpoint, request);
     // info!("{:?}", res);
-    serde_json::from_str::<GetShredResponse>(res.to_string().as_str())
+    serde_json::from_str::<GetShredResponse>(&res)
 }
 
 async fn slot_update_loop(
     slot_update_tx: Sender<u64>,
     pub_sub: String,
     status_sampler: Arc<Mutex<ClientStatus>>,
-) {
-    let connection = match connect(Url::parse(pub_sub.as_str()).unwrap()) {
+) -> anyhow::Result<()> {
+    let result = match connect(Url::parse(pub_sub.as_str()).unwrap()) {
         Ok((socket, _response)) => Some((socket, _response)),
         Err(_) => {
             let mut status = status_sampler.lock().unwrap();
             *status = ClientStatus::Crashed(String::from("Client can't connect to socket"));
-
-            Mutex::unlock(status);
             None
         }
-    }; //
+    }; 
+    
+    if result.is_none() { 
+        return Err(anyhow!(""));
+    }
+    let (mut socket, _response) = result.unwrap();
 
-    match connection {
-        Some((mut socket, _response)) => {
-            socket
-                .write_message(Message::Text(
-                    r#"{ "jsonrpc": "2.0", "id": 1, "method": "slotSubscribe" }"#.into(),
-                ))
-                .unwrap();
+    socket.write_message(Message::Text(
+        r#"{ "jsonrpc": "2.0", "id": 1, "method": "slotSubscribe" }"#.into(),
+    ))?;
 
-            loop {
-                match socket.read_message() {
-                    Ok(msg) => {
-                        let res =
-                            serde_json::from_str::<SlotSubscribeResponse>(msg.to_string().as_str());
-                        // info!("res: {:?}", msg.to_string().as_str());
-                        if let Ok(res) = res {
-                            match slot_update_tx.send(res.params.result.root as u64) {
-                                Ok(_) => {
-                                    info!("slot updated: {:?}", res.params.result.root);
-                                }
-                                Err(e) => {
-                                    info!(
-                                        "error here: {:?} {:?}",
-                                        e, res.params.result.root as u64
-                                    );
-                                    continue; // @TODO: we should add retries here incase send fails for some reason
-                                }
-                            }
+    loop {
+        match socket.read_message() {
+            Ok(msg) => {
+                let res =
+                    serde_json::from_str::<SlotSubscribeResponse>(msg.to_string().as_str());
+
+                // info!("res: {:?}", msg.to_string().as_str());
+                if let Ok(res) = res {
+                    match slot_update_tx.send(res.params.result.root as u64) {
+                        Ok(_) => {
+                            info!("slot updated: {:?}", res.params.result.root);
+                        }
+                        Err(e) => {
+                            info!(
+                                "error here: {:?} {:?}",
+                                e, res.params.result.root as u64
+                            );
+                            continue; // @TODO: we should add retries here incase send fails for some reason
                         }
                     }
-                    Err(e) => info!("err: {:?}", e),
                 }
             }
+            Err(e) => info!("err: {:?}", e),
         }
-        None => {}
     }
+}
+
+macro_rules! unwrap_or_return {
+    (Result $var:ident) => {
+        if let Err(e) = $var { 
+            return Err(e.into());
+        } else { 
+            $var.unwrap()
+        }
+    };
+    (Option $var:ident $err:expr) => {
+        if $var.is_none() { 
+            return Err(anyhow!($err));
+        } else { 
+            $var.unwrap()
+        }
+    };
+    (OptionRef $var:ident $err:expr) => {
+        if $var.is_none() { 
+            return Err(anyhow!($err));
+        } else { 
+            $var.as_ref().unwrap()
+        }
+    };
+}
+
+async fn get_shreds_and_leader_for_slot(
+    slot: u64,
+    endpoint: &String
+) -> anyhow::Result<(Vec<Option<Shred>>, Pubkey)> { 
+
+    // get shred length (max_shreds_per_slot)
+    let first_shred = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
+    let first_shred = unwrap_or_return!(Result first_shred);
+
+    let first_shred = &first_shred.result.shreds[1]; 
+    let first_shred = unwrap_or_return!(OptionRef first_shred "first shred not found");
+
+    let max_shreds_per_slot = {
+        if let Some(data_shred) = &first_shred.shred_data { 
+            Shred::ShredData(data_shred.clone())
+                .num_data_shreds()
+                .expect("num data shreds error")
+        } else if let Some(code_shred) = &first_shred.shred_code { 
+            Shred::ShredCode(code_shred.clone())
+                    .num_coding_shreds()
+                    .expect("num code shreds error")
+        } else {
+            // todo
+            return Err(anyhow!("shred isnt either data or code type"));
+        }
+    };
+
+    // get a random sample of shreds
+    let mut shred_indices_for_slot = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
+    shred_indices_for_slot.push(0_usize);
+    info!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
+
+    let shreds_for_slot = request_shreds(
+        slot as usize,
+        shred_indices_for_slot.clone(),
+        endpoint.clone(),
+    )
+    .await;
+    let shreds_for_slot = unwrap_or_return!(Result shreds_for_slot);
+
+    info!("get shred for slot in 2nd req");
+    let mut shreds: Vec<Option<Shred>> = shreds_for_slot
+        .result
+        .shreds
+        .par_iter()
+        .map(|s| try_coerce_shred!(s))
+        .collect();
+
+    // info!("before leader");
+    let leader = solana_ledger::shred::Pubkey::from_str(
+        shreds_for_slot.result.leader.as_str(),
+    )?;
+
+    // info!("leader {:?}", leader);
+    let mut fullfill_count = AtomicU32::new(0u32);
+    shreds.dedup();
+    shreds.iter().for_each(|f| {
+        if let Some(s) = f {
+            info!("{:?}", s.index());
+        }
+    });
+
+    shreds.par_iter().for_each(|s| {
+        if let Some(s) = s {
+            match shred_indices_for_slot.contains(&(s.index() as usize)) {
+                true => {
+                    fullfill_count.fetch_add(1, Ordering::Relaxed);
+                    info!(
+                        "Received requested shred: {:?} for slot: {:?}",
+                        s.index(),
+                        s.slot()
+                    )
+                }
+                false => info!(
+                    "Received unrequested shred index: {:?} for slot: {:?}",
+                    s.index(),
+                    s.slot()
+                ),
+            }
+        } else {
+            info!("Received empty")
+        }
+    });
+
+    if (fullfill_count.get_mut().to_owned() as usize) < shred_indices_for_slot.len()
+    {
+        info!("Received incomplete number of shreds, requested {:?} shreds for slot {:?} and received {:?}", shred_indices_for_slot.len(),slot, fullfill_count);
+    }
+
+    Ok((shreds, leader))
 }
 
 async fn shred_update_loop(
@@ -189,137 +325,41 @@ async fn shred_update_loop(
     endpoint: String,
     shred_tx: Sender<(Vec<Option<Shred>>, solana_ledger::shred::Pubkey)>,
     status_sampler: Arc<Mutex<ClientStatus>>,
-) {
+) -> anyhow::Result<()> {
     loop {
         {
             let mut status = status_sampler.lock().unwrap();
-
-            if let ClientStatus::Crashed(_) = &*status {
-                Mutex::unlock(status);
+            if let ClientStatus::Crashed(_) = &*status { 
+                return Err(anyhow!(""));
             } else {
                 *status = ClientStatus::Active(String::from(
                     "Monitoring Tinydancer: Actively Sampling Shreds",
                 ));
-                Mutex::unlock(status);
             }
         }
 
         if let Ok(slot) = slot_update_rx.recv() {
-            let shred_for_one = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
-            // info!("res {:?}", shred_for_one);
-            let shred_indices_for_slot = match shred_for_one {
-                Ok(first_shred) => {
-                    let first_shred = &first_shred.result.shreds[1].clone(); // add some check later
-
-                    let max_shreds_per_slot = if let Some(first_shred) = first_shred {
-                        match (
-                            first_shred.clone().shred_data,
-                            first_shred.clone().shred_code,
-                        ) {
-                            (Some(data_shred), None) => {
-                                Some(
-                                    Shred::ShredData(data_shred)
-                                        .num_data_shreds()
-                                        .expect("num data shreds error"),
-                                )
-                                // Some(data_shred. ().expect("num data shreds error"))
-                            }
-                            (None, Some(coding_shred)) => Some(
-                                Shred::ShredCode(coding_shred)
-                                    .num_coding_shreds()
-                                    .expect("num code shreds error"),
-                            ),
-                            _ => None,
-                        }
-                    } else {
-                        info!("shred: {:?}", first_shred);
-                        None
-                    };
-                    info!("max_shreds_per_slot {:?}", max_shreds_per_slot);
-
-                    if let Some(max_shreds_per_slot) = max_shreds_per_slot {
-                        let mut indices = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
-                        indices.push(0 as usize);
-                        Some(indices)
-                    } else {
-                        None
-                    }
-                }
-                Err(_) => {
-                    //@TODO: add logger here
-
-                    None
-                }
-            };
-            info!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
-            if let Some(shred_indices_for_slot) = shred_indices_for_slot.clone() {
-                let shreds_for_slot = request_shreds(
-                    slot as usize,
-                    shred_indices_for_slot.clone(),
-                    endpoint.clone(),
-                )
-                .await;
-                // info!("made 2nd req: {:?}", shreds_for_slot);
-                if let Ok(shreds_for_slot) = shreds_for_slot {
-                    info!("get shred for slot in 2nd req");
-                    let mut shreds: Vec<Option<Shred>> = shreds_for_slot
-                        .result
-                        .shreds
-                        .par_iter()
-                        .map(|s| try_coerce_shred!(s))
-                        .collect();
-                    // info!("before leader");
-                    let leader = solana_ledger::shred::Pubkey::from_str(
-                        shreds_for_slot.result.leader.as_str(),
-                    )
-                    .unwrap();
-                    // info!("leader {:?}", leader);
-                    let mut fullfill_count = AtomicU32::new(0u32);
-                    shreds.dedup();
-                    shreds.iter().for_each(|f| {
-                        if let Some(s) = f {
-                            info!("{:?}", s.index());
-                        }
-                    });
-                    shreds.par_iter().for_each(|s| {
-                        if let Some(s) = s {
-                            match shred_indices_for_slot.contains(&(s.index() as usize)) {
-                                true => {
-                                    fullfill_count.fetch_add(1, Ordering::Relaxed);
-                                    info!(
-                                        "Received requested shred: {:?} for slot: {:?}",
-                                        s.index(),
-                                        s.slot()
-                                    )
-                                }
-                                false => info!(
-                                    "Received unrequested shred index: {:?} for slot: {:?}",
-                                    s.index(),
-                                    s.slot()
-                                ),
-                            }
-                        } else {
-                            info!("Received empty")
-                        }
-                    });
-                    if (fullfill_count.get_mut().to_owned() as usize) < shred_indices_for_slot.len()
-                    {
-                        info!("Received incomplete number of shreds, requested {:?} shreds for slot {:?} and received {:?}", shred_indices_for_slot.len(),slot, fullfill_count);
-                    }
-                    shred_tx
-                        .send((shreds, leader))
-                        .expect("shred tx send error");
-                }
+            let shreds = get_shreds_and_leader_for_slot(slot, &endpoint).await;
+            if let Err(e) = shreds { 
+                info!("{}", e);
+                continue;
             }
+            let (shreds, leader) = shreds.unwrap();
+
+            shred_tx
+                .send((shreds, leader))
+                .expect("shred tx send error");
         }
     }
 }
+
 // use solana_ledger::shred::dispatch;
+
+// verifies the merkle proof of the shread 
 pub fn verify_sample(shred: &Shred, leader: solana_ledger::shred::Pubkey) -> bool {
     // @TODO fix error handling here
     let verify_merkle_root = match shred {
         Shred::ShredData(ShredData::Merkle(shred)) => Some(shred.verify_merkle_proof()),
-
         Shred::ShredCode(ShredCode::Merkle(shred)) => Some(shred.verify_merkle_proof()),
         _ => None,
     };
@@ -335,17 +375,16 @@ pub fn verify_sample(shred: &Shred, leader: solana_ledger::shred::Pubkey) -> boo
         }
     }]
     .iter()
-    .all(|s| *s == true);
+    .all(|s| *s);
     verified
 }
+
 pub async fn shred_verify_loop(
     shred_rx: Receiver<(Vec<Option<Shred>>, solana_ledger::shred::Pubkey)>,
     verified_shred_tx: Sender<(Shred, solana_ledger::shred::Pubkey)>,
-) {
+) -> anyhow::Result<()> {
     loop {
-        let rx = shred_rx.recv();
-
-        if let Ok((shreds, leader)) = rx {
+        if let Ok((shreds, leader)) = shred_rx.recv() {
             shreds.par_iter().for_each(|sh| match sh {
                 Some(shred) => {
                     let verified = verify_sample(shred, leader);
@@ -365,19 +404,22 @@ pub async fn shred_verify_loop(
                     }
                 }
                 None => {
-                    info!("none")
+                    // info!("none")
                 }
             });
         } else {
-            info!("None")
+            // info!("None")
         }
     }
 }
+
+
+// store verified shreds in db
 pub async fn shred_archiver(
     verified_shred_rx: Receiver<(Shred, solana_ledger::shred::Pubkey)>,
-    archive_config: ArchiveConfig,
+    _archive_config: ArchiveConfig,
     instance: Arc<rocksdb::DB>,
-) {
+) -> anyhow::Result<()> {
     loop {
         if let Ok((verified_shred, leader)) = verified_shred_rx.recv() {
             let mut opts = RocksOptions::default();
@@ -413,119 +455,25 @@ pub async fn shred_archiver(
         }
     }
 }
+
+
 pub async fn pull_and_verify_shreds(slot: usize, endpoint: String) -> bool {
-    let shred_for_one = request_shreds(slot as usize, vec![0], endpoint.clone()).await;
-    // info!("res {:?}", shred_for_one);
-    let shred_indices_for_slot = match shred_for_one {
-        Ok(first_shred) => {
-            let first_shred = &first_shred.result.shreds[1].clone(); // add some check later
-
-            let max_shreds_per_slot = if let Some(first_shred) = first_shred {
-                match (
-                    first_shred.clone().shred_data,
-                    first_shred.clone().shred_code,
-                ) {
-                    (Some(data_shred), None) => {
-                        Some(
-                            Shred::ShredData(data_shred)
-                                .num_data_shreds()
-                                .expect("num data shreds error"),
-                        )
-                        // Some(data_shred. ().expect("num data shreds error"))
-                    }
-                    (None, Some(coding_shred)) => Some(
-                        Shred::ShredCode(coding_shred)
-                            .num_coding_shreds()
-                            .expect("num code shreds error"),
-                    ),
-                    _ => None,
-                }
-            } else {
-                info!("shred: {:?}", first_shred);
-                None
-            };
-            info!("max_shreds_per_slot {:?}", max_shreds_per_slot);
-
-            if let Some(max_shreds_per_slot) = max_shreds_per_slot {
-                let mut indices = gen_random_indices(max_shreds_per_slot as usize, 10); // unwrap only temporary
-                indices.push(0 as usize);
-                Some(indices)
-            } else {
-                None
-            }
-        }
-        Err(_) => {
-            //@TODO: add logger here
-
-            None
-        }
-    };
-    info!("indices of: {:?} {:?}", shred_indices_for_slot, slot);
-    if let Some(shred_indices_for_slot) = shred_indices_for_slot.clone() {
-        let shreds_for_slot = request_shreds(
-            slot as usize,
-            shred_indices_for_slot.clone(),
-            endpoint.clone(),
-        )
-        .await;
-        // info!("made 2nd req: {:?}", shreds_for_slot);
-        if let Ok(shreds_for_slot) = shreds_for_slot {
-            info!("get shred for slot in 2nd req");
-            let mut shreds: Vec<Option<Shred>> = shreds_for_slot
-                .result
-                .shreds
-                .par_iter()
-                .map(|s| try_coerce_shred!(s))
-                .collect();
-            // info!("before leader");
-            let leader =
-                solana_ledger::shred::Pubkey::from_str(shreds_for_slot.result.leader.as_str())
-                    .unwrap();
-            // info!("leader {:?}", leader);
-            let mut fullfill_count = AtomicU32::new(0u32);
-            shreds.dedup();
-            shreds.iter().for_each(|f| {
-                if let Some(s) = f {
-                    info!("{:?}", s.index());
-                }
-            });
-            shreds.par_iter().for_each(|s| {
-                if let Some(s) = s {
-                    match shred_indices_for_slot.contains(&(s.index() as usize)) {
-                        true => {
-                            fullfill_count.fetch_add(1, Ordering::Relaxed);
-                            info!(
-                                "Received requested shred: {:?} for slot: {:?}",
-                                s.index(),
-                                s.slot()
-                            )
-                        }
-                        false => info!(
-                            "Received unrequested shred index: {:?} for slot: {:?}",
-                            s.index(),
-                            s.slot()
-                        ),
-                    }
-                } else {
-                    info!("Received empty")
-                }
-            });
-            if (fullfill_count.get_mut().to_owned() as usize) < shred_indices_for_slot.len() {
-                info!("Received incomplete number of shreds, requested {:?} shreds for slot {:?} and received {:?}", shred_indices_for_slot.len(),slot, fullfill_count);
-            }
-            let sampled = shreds
-                .par_iter()
-                .flatten()
-                .all(|s| verify_sample(s, leader));
-            info!("pull and verify {:?}", sampled);
-            sampled
-        } else {
-            false
-        }
-    } else {
-        false
+    let shreds = get_shreds_and_leader_for_slot(slot as u64, &endpoint).await;
+    if let Err(e) = shreds { 
+        info!("{}", e);
+        return false;
     }
+    let (shreds, leader) = shreds.unwrap();
+
+    let sampled = shreds
+        .par_iter()
+        .flatten()
+        .all(|s| verify_sample(s, leader));
+
+    info!("pull and verify {:?}", sampled);
+    sampled
 }
+
 pub fn put_serialized<T: serde::Serialize + std::fmt::Debug>(
     instance: &rocksdb::DB,
     cf: &ColumnFamily,
@@ -534,7 +482,7 @@ pub fn put_serialized<T: serde::Serialize + std::fmt::Debug>(
 ) -> Result<(), String> {
     match serde_json::to_string(&value) {
         Ok(serialized) => instance
-            .put_cf(cf, &key, serialized.into_bytes())
+            .put_cf(cf, key, serialized.into_bytes())
             .map_err(|err| format!("Failed to put to ColumnFamily:{:?}", err)),
         Err(err) => Err(format!(
             "Failed to serialize to String. T: {:?}, err: {:?}",
@@ -626,11 +574,11 @@ mod tests {
         opts.create_missing_column_families(true);
         let instance = DB::open_cf(&opts, "/tmp", vec![SHRED_CF]).unwrap();
         let slot: u64 = 1963754;
-        let index: u32 = 11;
+        let _index: u32 = 11;
         let key = hashv(&[
             &slot.to_le_bytes(),
             &u8::from(ShredType::Data).to_le_bytes(),
-            &u32::from(0 as u32).to_le_bytes(), // can be random
+            &0_u32.to_le_bytes(), // can be random
         ])
         .to_bytes();
         let cf = instance.cf_handle(SHRED_CF).unwrap();

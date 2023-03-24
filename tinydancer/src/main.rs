@@ -29,6 +29,12 @@
 #![allow(dead_code)]
 #![feature(mutex_unlock)]
 mod tinydancer;
+use crossterm::style::Stylize;
+use reqwest::header::{ACCEPT, CONTENT_TYPE};
+use sampler::{pull_and_verify_shreds, ArchiveConfig};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use spinoff::{spinners, Color, Spinner};
 use std::{
     f32::consts::E,
     fs::{self, File, OpenOptions},
@@ -37,12 +43,6 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-
-use crossterm::style::Stylize;
-use sampler::{pull_and_verify_shreds, ArchiveConfig};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use spinoff::{spinners, Color, Spinner};
 use tinydancer::{endpoint, Cluster, TinyDancer, TinyDancerConfig};
 mod macros;
 use colored::Colorize;
@@ -50,15 +50,19 @@ mod rpc_wrapper;
 mod sampler;
 mod ui;
 
+use anyhow::{anyhow, Result};
 use clap::{ArgGroup, Parser, Subcommand, *};
+use tracing::info;
+use tracing_subscriber;
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
-
 struct Args {
     /// Subcommands to run
     #[clap(subcommand)]
     command: Commands,
 }
+
 #[derive(Debug, Subcommand)]
 pub enum Commands {
     /// Start the local light client
@@ -89,18 +93,20 @@ pub enum Commands {
     },
     /// Stream the client logs to your terminal
     Logs {
-        #[clap(long, required = false, default_value = "client.log")]
+        #[clap(long, required = false, default_value = "/tmp/client.log")]
         log_path: String,
     },
     /// Edit your client config
     #[clap(subcommand)]
     Config(ConfigSubcommands),
+    // Get the latest slot
     Slot,
 }
+
 #[derive(Debug, Subcommand)]
 pub enum ConfigSubcommands {
     Set {
-        #[clap(long, required = false, default_value = "client.log")]
+        #[clap(long, required = false, default_value = "/tmp/client.log")]
         log_path: String,
         /// The cluster you want to run the client on (Mainnet, Localnet,Devnet, <custom-url>)
         #[clap(long, short, required = false, default_value = "Localnet")]
@@ -108,9 +114,16 @@ pub enum ConfigSubcommands {
     },
     Get,
 }
-// ~/.config/
+
+pub fn get_config_file() -> Result<ConfigSchema> {
+    let home_path = std::env::var("HOME")?;
+    let path = home_path + "/.config/tinydancer/config.json";
+    let config_str = std::fs::read_to_string(path)?;
+    Ok(serde_json::from_str::<ConfigSchema>(&config_str)?)
+}
+
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     let args = Args::parse();
 
     match args.command {
@@ -121,6 +134,7 @@ async fn main() {
                 .output()
                 .expect("log command failed");
         }
+
         Commands::Start {
             enable_ui_service,
             sample_qty,
@@ -128,77 +142,62 @@ async fn main() {
             shred_archive_duration,
             tui_monitor,
         } => {
-            let mut config_file = {
-                let home_path = std::env::var("HOME").unwrap();
-
-                // println!("path {:?}", path);
-                let text =
-                    std::fs::read_to_string(home_path + "/.config/tinydancer/config.json").unwrap();
-
-                serde_json::from_str::<ConfigSchema>(&text)
+            let config_file =
+                get_config_file().map_err(|_| anyhow!("tinydancer config not set"))?;
+            let config = TinyDancerConfig {
+                enable_ui_service,
+                rpc_endpoint: get_cluster(config_file.cluster),
+                sample_qty,
+                tui_monitor,
+                log_path: config_file.log_path,
+                archive_config: {
+                    archive_path.map(|path| Ok(ArchiveConfig {
+                        shred_archive_duration,
+                        archive_path: path,
+                    })).unwrap_or(Err(anyhow!("shred path not provided...")))?
+                },
             };
-            match config_file {
-                Ok(config_file) => {
-                    let config = TinyDancerConfig {
-                        enable_ui_service,
-                        rpc_endpoint: get_cluster(config_file.cluster),
-                        sample_qty,
-                        tui_monitor,
-                        log_path: config_file.log_path,
-                        archive_config: {
-                            if let Some(path) = archive_path {
-                                Some(ArchiveConfig {
-                                    shred_archive_duration,
-                                    archive_path: path,
-                                })
-                            } else {
-                                None
-                            }
-                        },
-                    };
-                    let client = TinyDancer::new(config).await;
-                    client.join().await;
-                }
-                Err(e) => {
-                    // println!("error: {:?}", e);
-                    std::process::Command::new("echo")
-                        .arg("\"Please set a config first using tindancer config set\"")
-                        .spawn()
-                        .expect("Config not set");
-                }
-            }
+
+            TinyDancer::start(config).await.unwrap();
         }
+
         Commands::Slot => {
-            let config_file = {
-                let home_path = std::env::var("HOME").unwrap();
+            let config_file =
+                get_config_file().map_err(|_| anyhow!("tinydancer config not set"))?;
+            let slot_res = {
+                let req_client = reqwest::Client::new();
+                let res = req_client
+                    .post(get_endpoint(config_file.cluster))
+                    .body(
+                        serde_json::json!({"jsonrpc":"2.0","id":1, "method":"getSlot"}).to_string(),
+                    )
+                    .header(CONTENT_TYPE, "application/json")
+                    .header(ACCEPT, "application/json")
+                    .send()
+                    .await;
 
-                // println!("path {:?}", path);
-                let text =
-                    std::fs::read_to_string(home_path + "/.config/tinydancer/config.json").unwrap();
-
-                serde_json::from_str::<ConfigSchema>(&text)
+                res
             };
-            match config_file {
-                Ok(config_file) => {
-                    let slot_res = send_rpc_call!(
-                        get_endpoint(config_file.cluster),
-                        serde_json::json!({"jsonrpc":"2.0","id":1, "method":"getSlot"}).to_string()
-                    );
-                    let slot = serde_json::from_str::<GetSlotResponse>(slot_res.as_str());
+
+            match slot_res {
+                Ok(get_slot_response) => {
+                    let slot_text = get_slot_response.text().await.map_err(|e| {
+                        anyhow!("Failed to get slot due to error: {}", e.to_string())
+                    })?;
+
+                    let slot = serde_json::from_str::<GetSlotResponse>(&slot_text.as_str());
+
                     match slot {
                         Ok(slot) => {
                             println!("Slot: {}", slot.result.to_string().green(),);
                         }
                         Err(e) => {
-                            println!("Failed to get slot,due to error: {}", e.to_string().red());
+                            println!("Failed to get slot due to error: {}", e.to_string().red());
                         }
                     }
                 }
-                Err(_) => {
-                    std::process::Command::new("echo")
-                        .arg("\"Please set a config first using tindancer config set\"")
-                        .spawn()
-                        .expect("Config not set");
+                Err(e) => {
+                    println!("Failed to get slot,due to error: {}", e.to_string().red());
                 }
             }
         }
@@ -224,117 +223,78 @@ async fn main() {
                 // println!("{:?}", fs::create_dir_all("~/.config/tinydancer"));
 
                 let home_path = std::env::var("HOME").unwrap();
-                let is_existing = home_path.clone() + "/.config/tinydancer";
-                let path = Path::new(&is_existing);
+                let tinydancer_dir = home_path + "/.config/tinydancer";
+
+                let path = Path::new(&tinydancer_dir);
                 if !path.exists() {
                     std::process::Command::new("mkdir")
-                        .arg(home_path.clone() + "/.config/tinydancer")
+                        .arg(&tinydancer_dir)
                         .stdout(std::process::Stdio::null())
                         .spawn()
                         .expect("couldnt make dir");
                 }
-                let is_existing = home_path.clone() + "/.config/tinydancer/config.json";
-                let path = Path::new(&is_existing);
+                sleep(Duration::from_secs(1));
+
+                let config_path = tinydancer_dir + "/config.json";
+                let path = Path::new(&config_path);
                 if !path.exists() {
                     std::process::Command::new("touch")
-                        .arg(home_path.clone() + "/.config/tinydancer/config.json")
+                        .arg(&config_path)
                         .stdout(std::process::Stdio::null())
                         .spawn()
                         .expect("couldnt make file");
                 }
                 sleep(Duration::from_secs(1));
-                loop {
-                    let mut config_file = {
-                        let home_path = std::env::var("HOME").unwrap();
 
-                        // println!("path {:?}", path);
-                        let text =
-                            std::fs::read_to_string(home_path + "/.config/tinydancer/config.json")
-                                .unwrap();
-
-                        serde_json::from_str::<ConfigSchema>(&text)
-                    };
-
-                    match config_file {
-                        Ok(mut config_file) => {
-                            config_file.log_path = log_path.clone();
-                            config_file.cluster = cluster.clone();
-                            std::fs::write(
-                                home_path.clone() + "/.config/tinydancer/config.json",
-                                serde_json::to_string_pretty(&config_file).unwrap(),
-                            )
-                            .unwrap();
-                            break;
-                        }
-                        Err(_) => {
-                            std::fs::write(
-                                home_path.clone() + "/.config/tinydancer/config.json",
-                                serde_json::to_string_pretty(&serde_json::json!({
-                                    "cluster":"Localnet",
-                                    "logPath":"client.log"
-                                }))
-                                .unwrap(),
-                            )
-                            .unwrap();
-                            break;
-                        }
+                let config_file = get_config_file();
+                match config_file {
+                    Ok(mut config_file) => {
+                        // overwrite
+                        config_file.log_path = log_path;
+                        config_file.cluster = cluster;
+                        std::fs::write(config_path, serde_json::to_string_pretty(&config_file)?)?;
+                    }
+                    Err(_) => {
+                        // initialize
+                        std::fs::write(
+                            config_path,
+                            serde_json::to_string_pretty(&serde_json::json!({
+                                "cluster":"Localnet",
+                                "logPath":"/tmp/client.log"
+                            }))?,
+                        )?;
                     }
                 }
             }
         },
         Commands::Verify { slot } => {
-            let mut spinner = Spinner::new(
+            let _spinner = Spinner::new(
                 spinners::Dots,
                 format!("Verifying Shreds for Slot {}", slot),
                 Color::Green,
             );
-            let home_path = std::env::var("HOME").unwrap();
-            let is_existing = home_path.clone() + "/.config/tinydancer/config.json";
-            let path = Path::new(&is_existing);
-            if path.exists() {
-                let mut config_file = {
-                    let home_path = std::env::var("HOME").unwrap();
 
-                    let text =
-                        std::fs::read_to_string(home_path + "/.config/tinydancer/config.json")
-                            .unwrap();
+            let config_file =
+                get_config_file().map_err(|_| anyhow!("tinydancer config not set"))?;
+            let is_verified = pull_and_verify_shreds(slot, get_endpoint(config_file.cluster)).await;
 
-                    serde_json::from_str::<ConfigSchema>(&text)
-                };
-                // println!("path {:?}", config_file);
-                match config_file {
-                    Ok(config_file) => {
-                        let is_verified =
-                            pull_and_verify_shreds(slot, get_endpoint(config_file.cluster)).await;
-
-                        if is_verified {
-                            println!(
-                                "\nSlot {} is {} ✓",
-                                slot.to_string().yellow(),
-                                "Valid".to_string().green()
-                            );
-                        } else {
-                            println!(
-                                "\nSlot {} is not {} ❌",
-                                slot.to_string().yellow(),
-                                "Valid".to_string().red()
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        tiny_logger::logs::error!("{}", e);
-                        println!("e {:?}", e);
-                    }
-                };
+            if is_verified {
+                println!(
+                    "\nSlot {} is {} ✓",
+                    slot.to_string().yellow(),
+                    "Valid".to_string().green()
+                );
             } else {
                 println!(
-                    "{} {}",
-                    "Initialise a config first using:".to_string().yellow(),
-                    "tinydancer set config".to_string().green()
+                    "\nSlot {} is not {} ❌",
+                    slot.to_string().yellow(),
+                    "Valid".to_string().red()
                 );
             }
         }
     }
+
+    Ok(())
 }
 
 pub fn get_cluster(cluster: String) -> Cluster {

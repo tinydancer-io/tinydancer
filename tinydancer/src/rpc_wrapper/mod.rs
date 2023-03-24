@@ -65,7 +65,7 @@ pub struct TransactionServiceConfig {
 }
 
 async fn get_identity_keypair(identity_from_cli: &String) -> Keypair {
-    if let Some(identity_env_var) = env::var("IDENTITY").ok() {
+    if let Ok(identity_env_var) = env::var("IDENTITY") {
         if let Ok(identity_bytes) = serde_json::from_str::<Vec<u8>>(identity_env_var.as_str()) {
             print!("HASIII TO HASU");
             Keypair::from_bytes(identity_bytes.as_slice()).unwrap()
@@ -155,6 +155,7 @@ impl ClientService<TransactionServiceConfig> for TransactionService {
             tx_handle: transaction_handle,
         }
     }
+
     async fn join(self) -> std::result::Result<(), Self::ServiceError> {
         let _ = self.tx_handle.await;
         Ok(())
