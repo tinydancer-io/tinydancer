@@ -20,6 +20,9 @@ Or install using cargo
 ```
 cargo install --git https://github.com/tinydancer-io/half-baked-client tinydancer
 ```
+## Testing
+Testing is mostly manual, in the future we will implement unit tests 
+but for now we have bash scripts in the `scripts` folder.
 
 ## Contributors
 
