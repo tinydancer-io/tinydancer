@@ -19,21 +19,18 @@ macro_rules! block_on {
 macro_rules! try_coerce_shred {
     ($response:expr) => {{
         let shred = if let Some(response) = $response.clone() {
-            let shred = match (response.shred_data, response.shred_code) {
-                (Some(data_shred), None) => {
-                    Some(Shred::ShredData(data_shred))
-                    // Some(data_shred. ().expect("num data shreds error"))
-                }
+            match (response.shred_data, response.shred_code) {
+                (Some(data_shred), None) => Some(Shred::ShredData(data_shred)),
                 (None, Some(coding_shred)) => Some(Shred::ShredCode(coding_shred)),
                 _ => None,
-            };
-            shred
+            }
         } else {
             None
         };
         shred
     }};
 }
+
 #[macro_export]
 macro_rules! send_rpc_call {
     ($url:expr, $body:expr) => {{
