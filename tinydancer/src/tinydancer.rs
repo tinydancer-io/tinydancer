@@ -103,13 +103,7 @@ impl TinyDancer {
             db_instance: db.clone(),
         });
 
-        let ui_service = if enable_ui_service {
-            Some(UiService::new(UiConfig {
-                client_status,
-                enable_ui_service,
-                tui_monitor,
-            }))
-        } else if tui_monitor {
+        let ui_service = if enable_ui_service || tui_monitor {
             Some(UiService::new(UiConfig {
                 client_status,
                 enable_ui_service,
@@ -117,7 +111,7 @@ impl TinyDancer {
             }))
         } else {
             None
-        };
+        };        
 
         // run
         sample_service
