@@ -112,15 +112,15 @@ impl ClientService<SampleServiceConfig> for SampleService {
             }
         });
 
-        let sample_indices: Vec<u64> = Vec::default();
         Self {
             sampler_handle,
-            sample_indices,
+            sample_indices: Vec::default(),
         }
     }
 
-    async fn join(self) -> std::result::Result<(), Self::ServiceError> {
-        self.sampler_handle.await
+    async fn join(mut self) -> Result<(), Self::ServiceError> {
+        self.sampler_handle.await?;
+        Ok(())
     }
 }
 
