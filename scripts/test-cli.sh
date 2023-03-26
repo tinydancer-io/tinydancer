@@ -32,7 +32,7 @@ echo "Continue? (y/n)"
 read cont
 if [ "$cont" != "y" ]; then
     exit 1
-# fi
+fi
 
 echo "\033[0;32mtesting daemon..."
 # should handle gracefully
