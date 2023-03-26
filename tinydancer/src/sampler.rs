@@ -330,7 +330,7 @@ async fn shred_update_loop(
         {
             let mut status = status_sampler.lock().unwrap();
             if let ClientStatus::Crashed(_) = &*status { 
-                return Err(anyhow!(""));
+                return Err(anyhow!("Client crashed"));
             } else {
                 *status = ClientStatus::Active(String::from(
                     "Monitoring Tinydancer: Actively Sampling Shreds",
