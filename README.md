@@ -1,6 +1,6 @@
 # Tinydancer (V0)
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 
 ## Architecture
@@ -33,6 +33,7 @@ but for now we have bash scripts in the `scripts` folder.
   <tbody>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/0xNineteen"><img src="https://avatars.githubusercontent.com/u/100000306?v=4?s=100" width="100px;" alt="x19"/><br /><sub><b>x19</b></sub></a><br /><a href="https://github.com/tinydancer-io/half-baked-client/commits?author=0xNineteen" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/picklerick2349"><img src="https://avatars.githubusercontent.com/u/119039386?v=4?s=100" width="100px;" alt="Pickle Rick"/><br /><sub><b>Pickle Rick</b></sub></a><br /><a href="https://github.com/tinydancer-io/half-baked-client/commits?author=picklerick2349" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
