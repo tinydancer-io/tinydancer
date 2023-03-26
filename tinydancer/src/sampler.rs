@@ -118,9 +118,8 @@ impl ClientService<SampleServiceConfig> for SampleService {
         }
     }
 
-    async fn join(mut self) -> Result<(), Self::ServiceError> {
-        self.sampler_handle.await?;
-        Ok(())
+    async fn join(self) -> std::result::Result<(), Self::ServiceError> {
+        self.sampler_handle.await
     }
 }
 
