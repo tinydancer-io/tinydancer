@@ -112,10 +112,9 @@ impl ClientService<SampleServiceConfig> for SampleService {
             }
         });
 
-        let sample_indices: Vec<u64> = Vec::default();
         Self {
             sampler_handle,
-            sample_indices,
+            sample_indices: Vec::default(),
         }
     }
 
@@ -330,7 +329,7 @@ async fn shred_update_loop(
         {
             let mut status = status_sampler.lock().unwrap();
             if let ClientStatus::Crashed(_) = &*status { 
-                return Err(anyhow!(""));
+                return Err(anyhow!("Client crashed"));
             } else {
                 *status = ClientStatus::Active(String::from(
                     "Monitoring Tinydancer: Actively Sampling Shreds",
