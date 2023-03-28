@@ -11,14 +11,29 @@ The client is designed to be modular and easily extensible for additional functi
 ![Architecture Diagram](https://res.cloudinary.com/dev-connect/image/upload/v1675235495/diet-client-v0-arch_bhdd4c.png)
 
 ## Getting started
+**Install Rust**
+MacOS & Linux
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+Note: For Windows download rustup from this [link](https://forge.rust-lang.org/infra/other-installation-methods.html#other-ways-to-install-rustup)
 
-Build and add to path
+**Configure Toolchain**
+```
+rustup default nightly
+```
+
+**Build and Add to Path**
 ```
 cargo b -r && cp ./target/release/tinydancer ~/.local/bin/
 ```
-Or install using cargo
+**Or Install Using Cargo**
 ```
 cargo install --git https://github.com/tinydancer-io/half-baked-client tinydancer
+```
+**Confirm Installation**
+```
+tinydancer --help
 ```
 ## Testing
 Testing is mostly manual, in the future we will implement unit tests 
