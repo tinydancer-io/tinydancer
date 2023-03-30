@@ -3,6 +3,8 @@ macro_rules! convert_to_websocket {
     ($test:expr) => {
         if $test.contains("https") {
             $test.replace("https://", "wss://")
+        } else if $test.contains("http") {
+            $test.replace("http://", "ws://")
         } else {
             String::from("ws://0.0.0.0:8900")
         }

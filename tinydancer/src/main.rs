@@ -318,7 +318,7 @@ pub fn get_endpoint(cluster: String) -> String {
         "Mainnet" => "https://api.mainnet-beta.solana.com".to_owned(),
         "Devnet" => "https://api.devnet.solana.com".to_owned(),
         "Localnet" => "http://0.0.0.0:8899".to_owned(),
-        _ => "http://0.0.0.0:8899".to_owned(),
+        _ => cluster.to_owned(),
     }
 }
 
