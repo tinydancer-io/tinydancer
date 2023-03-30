@@ -77,7 +77,7 @@ pub enum Commands {
 
         /// Amount of shreds you want to sample per slot
         #[clap(long, short, default_value_t = 10)]
-        sample_qty: u64,
+        sample_qty: usize,
         /// Rocks db path for storing shreds
         #[clap(required = false)]
         archive_path: Option<String>,
@@ -90,6 +90,9 @@ pub enum Commands {
     Verify {
         #[clap(long, required = false, default_value = "0")]
         slot: usize,
+
+        #[clap(long, required = false, default_value = "10")]
+        sample_qty: usize,
     },
     /// Stream the client logs to your terminal
     Logs {
@@ -151,10 +154,14 @@ async fn main() -> Result<()> {
                 tui_monitor,
                 log_path: config_file.log_path,
                 archive_config: {
-                    archive_path.map(|path| Ok(ArchiveConfig {
-                        shred_archive_duration,
-                        archive_path: path,
-                    })).unwrap_or(Err(anyhow!("shred path not provided...")))?
+                    archive_path
+                        .map(|path| {
+                            Ok(ArchiveConfig {
+                                shred_archive_duration,
+                                archive_path: path,
+                            })
+                        })
+                        .unwrap_or(Err(anyhow!("shred path not provided...")))?
                 },
             };
 
@@ -267,7 +274,7 @@ async fn main() -> Result<()> {
                 }
             }
         },
-        Commands::Verify { slot } => {
+        Commands::Verify { slot, sample_qty } => {
             let _spinner = Spinner::new(
                 spinners::Dots,
                 format!("Verifying Shreds for Slot {}", slot),
@@ -276,7 +283,8 @@ async fn main() -> Result<()> {
 
             let config_file =
                 get_config_file().map_err(|_| anyhow!("tinydancer config not set"))?;
-            let is_verified = pull_and_verify_shreds(slot, get_endpoint(config_file.cluster)).await;
+            let is_verified =
+                pull_and_verify_shreds(slot, get_endpoint(config_file.cluster), sample_qty).await;
 
             if is_verified {
                 println!(

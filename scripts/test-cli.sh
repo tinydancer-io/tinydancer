@@ -28,6 +28,8 @@ slot_number=$(echo $slot | cut -d':' -f 2 | xargs | sed 's/\x1B\[[0-9;]\{1,\}[A-
 sleep 1
 tinydancer verify --slot "$slot_number"
 
+tinydancer verify --slot "$slot_number" --sample-qty 20
+
 echo "Continue? (y/n)"
 read cont
 if [ "$cont" != "y" ]; then
