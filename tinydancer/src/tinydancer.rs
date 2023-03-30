@@ -44,7 +44,7 @@ pub struct TinyDancer {
 #[derive(Clone)]
 pub struct TinyDancerConfig {
     pub rpc_endpoint: Cluster,
-    pub sample_qty: u64,
+    pub sample_qty: usize,
     pub enable_ui_service: bool,
     pub archive_config: ArchiveConfig,
     pub tui_monitor: bool,
@@ -82,12 +82,8 @@ impl TinyDancer {
         opts.create_missing_column_families(true);
 
         // setup db
-        let db = rocksdb::DB::open_cf(
-            &opts,
-            archive_config.clone().archive_path,
-            vec![SHRED_CF],
-        )
-        .unwrap();
+        let db = rocksdb::DB::open_cf(&opts, archive_config.clone().archive_path, vec![SHRED_CF])
+            .unwrap();
         let db = Arc::new(db);
 
         let sample_service_config = SampleServiceConfig {
@@ -95,6 +91,7 @@ impl TinyDancer {
             archive_config,
             instance: db.clone(),
             status_sampler,
+            sample_qty,
         };
         let sample_service = SampleService::new(sample_service_config);
 
@@ -111,7 +108,7 @@ impl TinyDancer {
             }))
         } else {
             None
-        };        
+        };
 
         // run
         sample_service

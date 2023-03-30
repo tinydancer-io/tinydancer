@@ -261,8 +261,12 @@ impl LiteRpcServer for LiteBridge {
 
         info!("glb {blockhash} {slot} {block_height}");
 
-        let sampled =
-            pull_and_verify_shreds(slot as usize, String::from("http://0.0.0.0:8899")).await;
+        let sampled = pull_and_verify_shreds(
+            slot as usize,
+            String::from("http://0.0.0.0:8899"),
+            10 as usize,
+        )
+        .await;
 
         Ok(LiteResponse {
             context: LiteRpcResponseContext {
@@ -341,8 +345,12 @@ impl LiteRpcServer for LiteBridge {
             .get_latest_block_info(CommitmentConfig::finalized())
             .await
             .slot;
-        let sampled =
-            pull_and_verify_shreds(slot as usize, String::from("http://0.0.0.0:8899")).await;
+        let sampled = pull_and_verify_shreds(
+            slot as usize,
+            String::from("http://0.0.0.0:8899"),
+            10 as usize,
+        )
+        .await;
         Ok(LiteResponse {
             context: LiteRpcResponseContext {
                 slot,
