@@ -47,6 +47,11 @@ use url::Url;
 
 pub const SHRED_CF: &str = "archived_shreds";
 
+pub const MAX_LOCKOUT_HISTORY: usize = 31;
+pub type BlockCommitmentArray = [u64; MAX_LOCKOUT_HISTORY + 1];
+
+pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
+
 pub struct SampleService {
     sample_indices: Vec<u64>,
     // peers: Vec<(Pubkey, SocketAddr)>,
@@ -153,6 +158,25 @@ pub async fn request_shreds(
     let res = send_rpc_call!(endpoint, request);
     // info!("{:?}", res);
     serde_json::from_str::<GetShredResponse>(&res)
+}
+
+pub async fn request_slot_voting(
+    slot: u64,
+    endpoint: String,
+) -> Result<RpcBlockCommitment<BlockCommitmentArray>, serde_json::Error> {
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "getBlockCommitment",
+        "params": [
+            slot
+        ]
+    })
+    .to_string();
+
+    let res = send_rpc_call!(endpoint, request);
+
+    serde_json::from_str::<RpcBlockCommitment<BlockCommitmentArray>>(&res)
 }
 
 async fn slot_update_loop(
@@ -535,6 +559,14 @@ pub struct GetShredResponse {
     pub result: GetShredResult,
     pub id: i64,
 }
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcBlockCommitment<T> {
+    pub commitment: Option<T>,
+    pub total_stake: u64,
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetShredResult {
