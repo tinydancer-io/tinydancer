@@ -12,6 +12,7 @@ use crate::{
     block_on,
     rpc_wrapper::{TransactionService, TransactionServiceConfig},
     sampler::{ArchiveConfig, SampleService, SampleServiceConfig, SHRED_CF},
+    consensus::{ConsensusService, ConsensusServiceConfig},
     ui::{UiConfig, UiService},
 };
 use anyhow::anyhow;
@@ -22,7 +23,7 @@ use tiny_logger::logs::info;
 // use log::info;
 // use log4rs;
 use std::error::Error;
-use tokio::{runtime::Runtime, task::JoinError, try_join};
+use tokio::{runtime::Runtime, task::JoinError, try_join, sync::Mutex as TokioMutex,};
 // use std::{thread, thread::JoinHandle, time::Duration};
 
 #[async_trait]
@@ -48,6 +49,7 @@ pub struct TinyDancerConfig {
     pub enable_ui_service: bool,
     pub archive_config: ArchiveConfig,
     pub tui_monitor: bool,
+    pub consensus_mode: bool,
     pub log_path: String,
 }
 
@@ -61,9 +63,12 @@ use std::path::PathBuf;
 impl TinyDancer {
     pub async fn start(config: TinyDancerConfig) -> Result<()> {
         let status = ClientStatus::Initializing(String::from("Starting Up Tinydancer"));
-
-        let client_status = Arc::new(Mutex::new(status));
+        let status_clone = status.clone();
+        let client_status = Arc::new(Mutex::new(status_clone));
         let status_sampler = client_status.clone();
+
+        let consensus_client_status = Arc::new(TokioMutex::new(status.clone()));
+        let status_consensus = consensus_client_status.clone();
 
         let TinyDancerConfig {
             enable_ui_service,
@@ -72,9 +77,10 @@ impl TinyDancer {
             tui_monitor,
             log_path,
             archive_config,
+            consensus_mode,
         } = config.clone();
         std::env::set_var("RUST_LOG", "info");
-        tiny_logger::setup_file_with_default(&log_path, "RUST_LOG");
+        // tiny_logger::setup_file_with_default(&log_path, "RUST_LOG");
 
         let mut opts = rocksdb::Options::default();
         opts.create_if_missing(true);
@@ -86,14 +92,45 @@ impl TinyDancer {
             .unwrap();
         let db = Arc::new(db);
 
-        let sample_service_config = SampleServiceConfig {
-            cluster: rpc_endpoint.clone(),
-            archive_config,
-            instance: db.clone(),
-            status_sampler,
-            sample_qty,
-        };
-        let sample_service = SampleService::new(sample_service_config);
+
+        if consensus_mode {
+            println!("Running in consensus_mode");
+
+            let consensus_service_config = ConsensusServiceConfig {
+                cluster: rpc_endpoint.clone(),
+                archive_config,
+                instance: db.clone(),
+                status_consensus: status_consensus.clone(),
+                sample_qty,
+            };
+
+            let consensus_service = ConsensusService::new(consensus_service_config);
+                    
+            // run the sampling service
+            consensus_service
+            .join()
+            .await
+            .expect("error in consensus service thread");
+        }
+
+        else{
+
+            let sample_service_config = SampleServiceConfig {
+                cluster: rpc_endpoint.clone(),
+                archive_config,
+                instance: db.clone(),
+                status_sampler,
+                sample_qty,
+            };
+
+            let sample_service = SampleService::new(sample_service_config);
+                    
+            // run the sampling service
+            sample_service
+            .join()
+            .await
+            .expect("error in sample service thread");
+        }
 
         let transaction_service = TransactionService::new(TransactionServiceConfig {
             cluster: rpc_endpoint.clone(),
@@ -109,12 +146,6 @@ impl TinyDancer {
         } else {
             None
         };
-
-        // run
-        sample_service
-            .join()
-            .await
-            .expect("error in sample service thread");
 
         transaction_service
             .join()
@@ -147,6 +178,7 @@ pub fn endpoint(cluster: Cluster) -> String {
         Cluster::Custom(cluster) => cluster,
     }
 }
+#[derive(Clone, PartialEq, Debug)]
 pub enum ClientStatus {
     Initializing(String),
     SearchingForRPCService(String),
