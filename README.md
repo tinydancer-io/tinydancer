@@ -39,7 +39,10 @@ tinydancer --help
 Testing is mostly manual, in the future we will implement unit tests 
 but for now we have bash scripts in the `scripts` folder.
 
-## Contributors
+# Credits
+The `rpc_wrapper` section of the client used to send rpc requests is borrowed from [blockworks-foundation/lite-rpc](https://github.com/blockworks-foundation/lite-rpc) and we are grateful to their team and the blockworks foundation for their work on it.
+
+# Contributors
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore-start -->
