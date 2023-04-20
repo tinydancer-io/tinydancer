@@ -16,8 +16,9 @@ pub mod tpu_manager;
 pub mod workers;
 // pub mod cli;
 pub mod block_store;
+use crate::convert_to_websocket;
 use crate::rpc_wrapper::bridge::LiteBridge;
-use crate::tinydancer::{ClientService, Cluster};
+use crate::tinydancer::{endpoint, ClientService, Cluster};
 use anyhow::bail;
 use async_trait::async_trait;
 use clap::Parser;
@@ -93,34 +94,17 @@ impl ClientService<TransactionServiceConfig> for TransactionService {
     type ServiceError = tokio::io::Error;
     fn new(config: TransactionServiceConfig) -> Self {
         let transaction_handle = tokio::spawn(async {
-            // let Args {
-            //     rpc_addr,
-            //     ws_addr,
-            //     tx_batch_size,
-            //     lite_rpc_ws_addr,
-            //     lite_rpc_http_addr,
-            //     tx_batch_interval_ms,
-            //     clean_interval_ms,
-            //     fanout_size,
-            //     identity_keypair,
-            // } = Args::parse();
-
             dotenv().ok();
-            let rpc_client = RpcClient::new(DEFAULT_RPC_ADDR.to_string());
+            let rpc_url = endpoint(config.cluster);
 
-            //let identity = get_identity_keypair(&identity_keypair).await;
-            // let blockhash = rpc_client.get_latest_blockhash().await.unwrap();
             let payer = Keypair::new();
-            let airdrop_sign = rpc_client
-                .request_airdrop(&payer.try_pubkey().unwrap(), 2000000000)
-                .await?;
-            info!("AIRDROP CONFIRMED:{}", airdrop_sign);
+
             let tx_batch_interval_ms = Duration::from_millis(DEFAULT_TX_BATCH_INTERVAL_MS);
             let clean_interval_ms = Duration::from_millis(DEFAULT_CLEAN_INTERVAL_MS);
 
             let light_bridge = LiteBridge::new(
-                String::from(DEFAULT_RPC_ADDR),
-                String::from(DEFAULT_WS_ADDR),
+                String::from(rpc_url.clone()),
+                String::from(convert_to_websocket!(rpc_url)),
                 DEFAULT_FANOUT_SIZE,
                 payer,
                 config.db_instance,

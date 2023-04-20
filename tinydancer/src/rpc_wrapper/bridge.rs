@@ -1,4 +1,5 @@
 use crate::{
+    get_endpoint,
     rpc_wrapper::{
         block_store::{BlockInformation, BlockStore},
         configs::{IsBlockHashValidConfig, SendTransactionConfig},
@@ -8,13 +9,18 @@ use crate::{
         workers::{BlockListener, Cleaner, TxSender, WireTransaction},
     },
     sampler::{get_serialized, pull_and_verify_shreds, SHRED_CF},
+    tinydancer::Cluster,
+    ConfigSchema,
 };
+use colored::Colorize;
 use hyper::Method;
 use reqwest::header;
 use serde::{self, Deserialize, Serialize};
 use solana_client::rpc_response::RpcApiVersion;
 use std::{
+    fs,
     ops::{Deref, Sub},
+    path::Path,
     str::FromStr,
     sync::Arc,
     time::Duration,
@@ -260,13 +266,24 @@ impl LiteRpcServer for LiteBridge {
         ) = self.block_store.get_latest_block(commitment_config).await;
 
         info!("glb {blockhash} {slot} {block_height}");
-
-        let sampled = pull_and_verify_shreds(
-            slot as usize,
-            String::from("http://0.0.0.0:8899"),
-            10 as usize,
-        )
-        .await;
+        let mut rpc_url = String::from("http://0.0.0.0:8899");
+        let home_path = std::env::var("HOME").unwrap();
+        let is_existing = home_path.clone() + "/.config/tinydancer/config.json";
+        let path = Path::new(&is_existing);
+        if path.exists() {
+            let file = fs::File::open(home_path.clone() + "/.config/tinydancer/config.json")
+                .expect("Error reading config in bridge");
+            let config: ConfigSchema = serde_json::from_reader(file).unwrap();
+            rpc_url = get_endpoint(config.cluster);
+        } else {
+            println!(
+                "{} {}",
+                "Initialise a config first using:".to_string().yellow(),
+                "tinydancer set config".to_string().green()
+            );
+        }
+        let sampled =
+            pull_and_verify_shreds(slot as usize, String::from(rpc_url), 10 as usize).await;
 
         Ok(LiteResponse {
             context: LiteRpcResponseContext {
@@ -345,12 +362,24 @@ impl LiteRpcServer for LiteBridge {
             .get_latest_block_info(CommitmentConfig::finalized())
             .await
             .slot;
-        let sampled = pull_and_verify_shreds(
-            slot as usize,
-            String::from("http://0.0.0.0:8899"),
-            10 as usize,
-        )
-        .await;
+        let mut rpc_url = String::from("http://0.0.0.0:8899");
+        let home_path = std::env::var("HOME").unwrap();
+        let is_existing = home_path.clone() + "/.config/tinydancer/config.json";
+        let path = Path::new(&is_existing);
+        if path.exists() {
+            let file = fs::File::open(home_path.clone() + "/.config/tinydancer/config.json")
+                .expect("Error reading config in bridge");
+            let config: ConfigSchema = serde_json::from_reader(file).unwrap();
+            rpc_url = get_endpoint(config.cluster);
+        } else {
+            println!(
+                "{} {}",
+                "Initialise a config first using:".to_string().yellow(),
+                "tinydancer set config".to_string().green()
+            );
+        }
+        let sampled =
+            pull_and_verify_shreds(slot as usize, String::from(rpc_url), 10 as usize).await;
         Ok(LiteResponse {
             context: LiteRpcResponseContext {
                 slot,
