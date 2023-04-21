@@ -6,7 +6,6 @@ use std::{
     },
 };
 
-use prometheus::{opts, register_int_counter, IntCounter};
 use solana_quic_client::{QuicConfig, QuicPool};
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;
@@ -22,11 +21,6 @@ pub type QuicTpuClient = TpuClient<QuicPool>;
 pub type QuicConnectionCache = TpuConnectionCache<QuicPool>;
 
 const TPU_CONNECTION_CACHE_SIZE: usize = 8;
-
-lazy_static::lazy_static! {
-static ref TPU_CONNECTION_RESET: IntCounter =
-    register_int_counter!(opts!("literpc_tpu_connection_reset", "Number of times tpu connection was reseted")).unwrap();
-}
 
 #[derive(Clone)]
 pub struct TpuManager {
@@ -102,7 +96,7 @@ impl TpuManager {
         .await?;
         self.error_count.store(0, Ordering::Relaxed);
         *self.tpu_client.write().await = Arc::new(tpu_client);
-        TPU_CONNECTION_RESET.inc();
+
         Ok(())
     }
 

@@ -4,17 +4,12 @@ use std::time::Duration;
 use anyhow::Context;
 use dashmap::DashMap;
 
-use prometheus::core::GenericGauge;
-use prometheus::{opts, register_int_gauge};
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig};
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::TransactionDetails;
 use tiny_logger::logs::info;
 use tokio::sync::RwLock;
 use tokio::time::Instant;
-lazy_static::lazy_static! {
-    static ref BLOCKS_IN_BLOCKSTORE: GenericGauge<prometheus::core::AtomicI64> = register_int_gauge!(opts!("literpc_blocks_in_blockstore", "Number of blocks in blockstore")).unwrap();
-}
 
 #[derive(Clone, Copy, Debug)]
 pub struct BlockInformation {
@@ -154,7 +149,6 @@ impl BlockStore {
         // ask the map what it doesn't have rn
         let slot = block_info.slot;
         self.blocks.insert(blockhash.clone(), block_info);
-        BLOCKS_IN_BLOCKSTORE.inc();
 
         let latest_block = self.get_latest_block_arc(commitment_config);
         if slot > latest_block.read().await.1.slot {
@@ -180,7 +174,6 @@ impl BlockStore {
                 || k.eq(&latest_confirmed)
                 || k.eq(&latest_finalized)
         });
-        BLOCKS_IN_BLOCKSTORE.set(self.blocks.len() as i64);
 
         info!(
             "Cleaned {} block info",

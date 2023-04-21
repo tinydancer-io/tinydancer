@@ -7,10 +7,6 @@ use anyhow::bail;
 use dashmap::DashMap;
 use tiny_logger::logs::{info, warn};
 
-use prometheus::{
-    core::GenericGauge, histogram_opts, opts, register_histogram, register_int_counter,
-    register_int_gauge, Histogram, IntCounter,
-};
 use solana_transaction_status::TransactionStatus;
 use tokio::{
     sync::Semaphore,
@@ -18,20 +14,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::rpc_wrapper::{bridge::TXS_IN_CHANNEL, tpu_manager::TpuManager};
-
-lazy_static::lazy_static! {
-    static ref TXS_SENT: IntCounter =
-        register_int_counter!("literpc_txs_sent", "Number of transactions forwarded to tpu").unwrap();
-    static ref TXS_SENT_ERRORS: IntCounter =
-    register_int_counter!("literpc_txs_sent_errors", "Number of errors while transactions forwarded to tpu").unwrap();
-    static ref TX_BATCH_SIZES: GenericGauge<prometheus::core::AtomicI64> = register_int_gauge!(opts!("literpc_tx_batch_size", "batchsize of tx sent by literpc")).unwrap();
-    static ref TT_SENT_TIMER: Histogram = register_histogram!(histogram_opts!(
-        "literpc_txs_send_timer",
-        "Time to send transaction batch",
-    ))
-    .unwrap();
-}
+use crate::rpc_wrapper::tpu_manager::TpuManager;
 
 pub type WireTransaction = Vec<u8>;
 const NUMBER_OF_TX_SENDERS: usize = 5;
@@ -82,7 +65,6 @@ impl TxSender {
             return;
         }
 
-        let histo_timer = TT_SENT_TIMER.start_timer();
         let start = Instant::now();
 
         let tpu_client = self.tpu_manager.clone();
@@ -93,19 +75,14 @@ impl TxSender {
         }
 
         let _quic_response = match tpu_client.try_send_wire_transaction_batch(txs).await {
-            Ok(_) => {
-                // metrics
-                TXS_SENT.inc_by(sigs_and_slots.len() as u64);
-                1
-            }
+            Ok(_) => 1,
             Err(err) => {
-                TXS_SENT_ERRORS.inc_by(sigs_and_slots.len() as u64);
                 warn!("{err}");
                 0
             }
         };
         drop(permit);
-        histo_timer.observe_duration();
+
         info!(
             "It took {} ms to send a batch of {} transaction(s)",
             start.elapsed().as_millis(),
@@ -135,7 +112,6 @@ impl TxSender {
                     match tokio::time::timeout(tx_send_interval, recv.recv()).await {
                         Ok(value) => match value {
                             Some((sig, tx, slot)) => {
-                                TXS_IN_CHANNEL.dec();
                                 sigs_and_slots.push((sig, slot));
                                 txs.push(tx);
                             }
@@ -167,7 +143,6 @@ impl TxSender {
                 };
 
                 if !txs.is_empty() {
-                    TX_BATCH_SIZES.set(txs.len() as i64);
                     let tx_sender = self.clone();
                     tokio::spawn(async move {
                         tx_sender.forward_txs(sigs_and_slots, txs, permit).await;

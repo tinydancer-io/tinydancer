@@ -6,7 +6,7 @@ use crate::{
         encoding::BinaryEncoding,
         rpc::LiteRpcServer,
         tpu_manager::TpuManager,
-        workers::{BlockListener, Cleaner, TxSender, WireTransaction},
+        workers::{Cleaner, TxSender, WireTransaction},
     },
     sampler::{get_serialized, pull_and_verify_shreds, SHRED_CF},
     tinydancer::Cluster,
@@ -32,7 +32,7 @@ use solana_ledger::shred::{Shred, ShredType, Slot};
 use tiny_logger::logs::{info, warn};
 
 use jsonrpsee::{server::ServerBuilder, types::SubscriptionResult, SubscriptionSink};
-use prometheus::{core::GenericGauge, opts, register_int_counter, register_int_gauge, IntCounter};
+
 use solana_rpc_client::{nonblocking::rpc_client::RpcClient, rpc_client::SerializableTransaction};
 use solana_rpc_client_api::{
     config::{RpcContextConfig, RpcRequestAirdropConfig, RpcSignatureStatusConfig},
@@ -50,24 +50,6 @@ use tokio::{
 };
 use tower_http::cors::{Any, CorsLayer};
 
-lazy_static::lazy_static! {
-    static ref RPC_SEND_TX: IntCounter =
-    register_int_counter!(opts!("literpc_rpc_send_tx", "RPC call send transaction")).unwrap();
-    static ref RPC_GET_LATEST_BLOCKHASH: IntCounter =
-    register_int_counter!(opts!("literpc_rpc_get_latest_blockhash", "RPC call to get latest block hash")).unwrap();
-    static ref RPC_IS_BLOCKHASH_VALID: IntCounter =
-    register_int_counter!(opts!("literpc_rpc_is_blockhash_valid", "RPC call to check if blockhash is vali calld")).unwrap();
-    static ref RPC_GET_SIGNATURE_STATUSES: IntCounter =
-    register_int_counter!(opts!("literpc_rpc_get_signature_statuses", "RPC call to get signature statuses")).unwrap();
-    static ref RPC_GET_VERSION: IntCounter =
-    register_int_counter!(opts!("literpc_rpc_get_version", "RPC call to version")).unwrap();
-    static ref RPC_REQUEST_AIRDROP: IntCounter =
-    register_int_counter!(opts!("literpc_rpc_airdrop", "RPC call to request airdrop")).unwrap();
-    static ref RPC_SIGNATURE_SUBSCRIBE: IntCounter =
-    register_int_counter!(opts!("literpc_rpc_signature_subscribe", "RPC call to subscribe to signature")).unwrap();
-    pub static ref TXS_IN_CHANNEL: GenericGauge<prometheus::core::AtomicI64> = register_int_gauge!(opts!("literpc_txs_in_channel", "Transactions in channel")).unwrap();
-}
-
 /// A bridge between clients and tpu
 pub struct LiteBridge {
     pub rpc_client: Arc<RpcClient>,
@@ -76,7 +58,7 @@ pub struct LiteBridge {
     // None if LiteBridge is not executed
     pub tx_send_channel: Option<UnboundedSender<(String, WireTransaction, u64)>>,
     pub tx_sender: TxSender,
-    pub block_listner: BlockListener,
+
     pub block_store: BlockStore,
 }
 
@@ -97,8 +79,8 @@ impl LiteBridge {
 
         let block_store = BlockStore::new(&rpc_client).await?;
 
-        let block_listner =
-            BlockListener::new(rpc_client.clone(), tx_sender.clone(), block_store.clone());
+        // let block_listner =
+        //     BlockListener::new(rpc_client.clone(), tx_sender.clone(), block_store.clone());
 
         Ok(Self {
             db_instance,
@@ -106,7 +88,7 @@ impl LiteBridge {
             tpu_manager,
             tx_send_channel: None,
             tx_sender,
-            block_listner,
+            // block_listner,
             block_store,
         })
     }
@@ -129,19 +111,19 @@ impl LiteBridge {
             .clone()
             .execute(tx_recv, tx_batch_size, tx_send_interval);
 
-        let finalized_block_listener = self
-            .block_listner
-            .clone()
-            .listen(CommitmentConfig::finalized());
+        // let finalized_block_listener = self
+        //     .block_listner
+        //     .clone()
+        //     .listen(CommitmentConfig::finalized());
 
-        let confirmed_block_listener = self
-            .block_listner
-            .clone()
-            .listen(CommitmentConfig::confirmed());
+        // let confirmed_block_listener = self
+        //     .block_listner
+        //     .clone()
+        //     .listen(CommitmentConfig::confirmed());
 
         let cleaner = Cleaner::new(
             self.tx_sender.clone(),
-            self.block_listner.clone(),
+            // self.block_listner.clone(),
             self.block_store.clone(),
             self.tpu_manager.clone(),
         )
@@ -192,8 +174,8 @@ impl LiteBridge {
             ws_server,
             http_server,
             tx_sender,
-            finalized_block_listener,
-            confirmed_block_listener,
+            // finalized_block_listener,
+            // confirmed_block_listener,
             cleaner,
         ];
 
@@ -208,8 +190,6 @@ impl LiteRpcServer for LiteBridge {
         tx: String,
         send_transaction_config: Option<SendTransactionConfig>,
     ) -> crate::rpc_wrapper::rpc::Result<String> {
-        RPC_SEND_TX.inc();
-
         let SendTransactionConfig {
             encoding,
             max_retries: _,
@@ -243,7 +223,6 @@ impl LiteRpcServer for LiteBridge {
             .expect("Lite Bridge Not Executed")
             .send((sig.to_string(), raw_tx, slot))
             .unwrap();
-        TXS_IN_CHANNEL.inc();
 
         Ok(BinaryEncoding::Base58.encode(sig))
     }
@@ -252,8 +231,6 @@ impl LiteRpcServer for LiteBridge {
         &self,
         config: Option<RpcContextConfig>,
     ) -> crate::rpc_wrapper::rpc::Result<LiteResponse<RpcBlockhash>> {
-        RPC_GET_LATEST_BLOCKHASH.inc();
-
         let commitment_config = config
             .map(|config| config.commitment.unwrap_or_default())
             .unwrap_or_default();
@@ -303,8 +280,6 @@ impl LiteRpcServer for LiteBridge {
         blockhash: String,
         config: Option<IsBlockHashValidConfig>,
     ) -> crate::rpc_wrapper::rpc::Result<RpcResponse<bool>> {
-        RPC_IS_BLOCKHASH_VALID.inc();
-
         let commitment = config.unwrap_or_default().commitment.unwrap_or_default();
         let commitment = CommitmentConfig { commitment };
 
@@ -346,8 +321,6 @@ impl LiteRpcServer for LiteBridge {
         sigs: Vec<String>,
         _config: Option<RpcSignatureStatusConfig>,
     ) -> crate::rpc_wrapper::rpc::Result<LiteResponse<Vec<Option<TransactionStatus>>>> {
-        RPC_GET_SIGNATURE_STATUSES.inc();
-
         let sig_statuses = sigs
             .iter()
             .map(|sig| {
@@ -391,8 +364,6 @@ impl LiteRpcServer for LiteBridge {
     }
 
     fn get_version(&self) -> crate::rpc_wrapper::rpc::Result<RpcVersionInfo> {
-        RPC_GET_VERSION.inc();
-
         let version = solana_version::Version::default();
         Ok(RpcVersionInfo {
             solana_core: version.to_string(),
@@ -406,8 +377,6 @@ impl LiteRpcServer for LiteBridge {
         lamports: u64,
         config: Option<RpcRequestAirdropConfig>,
     ) -> crate::rpc_wrapper::rpc::Result<String> {
-        RPC_REQUEST_AIRDROP.inc();
-
         let pubkey = match Pubkey::from_str(&pubkey_str) {
             Ok(pubkey) => pubkey,
             Err(err) => {
@@ -433,18 +402,17 @@ impl LiteRpcServer for LiteBridge {
         Ok(airdrop_sig)
     }
 
-    fn signature_subscribe(
-        &self,
-        mut sink: SubscriptionSink,
-        signature: String,
-        commitment_config: CommitmentConfig,
-    ) -> SubscriptionResult {
-        RPC_SIGNATURE_SUBSCRIBE.inc();
-        sink.accept()?;
-        self.block_listner
-            .signature_subscribe(signature, commitment_config, sink);
-        Ok(())
-    }
+    // fn signature_subscribe(
+    //     &self,
+    //     mut sink: SubscriptionSink,
+    //     signature: String,
+    //     commitment_config: CommitmentConfig,
+    // ) -> SubscriptionResult {
+    //     sink.accept()?;
+    //     self.block_listner
+    //         .signature_subscribe(signature, commitment_config, sink);
+    //     Ok(())
+    // }
 }
 
 impl Deref for LiteBridge {
