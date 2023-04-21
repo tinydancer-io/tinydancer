@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 description = "A light client for the solana blockchain "
 readme = "../README.md"
 homepage = "https://docs.tinydancer.io"
-repository = "https://github.com/tinydancer-io/half-baked-client"
+repository = "https://github.com/tinydancer-io/tinydancer"
 keywords = ["cli", "blockchain", "light-client","solana"]
 categories = ["command-line-utilities","blockchain"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

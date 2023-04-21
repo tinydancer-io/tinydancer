@@ -19,6 +19,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::{future::join_all, TryFutureExt};
 use rand::seq::index::sample;
+use serde::{Deserialize, Serialize};
 use tiny_logger::logs::info;
 // use log::info;
 // use log4rs;
@@ -160,8 +161,7 @@ impl TinyDancer {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Cluster {
     Mainnet,
     Devnet,
@@ -175,7 +175,7 @@ pub fn endpoint(cluster: Cluster) -> String {
         Cluster::Mainnet => String::from("https://api.mainnet-beta.solana.com"),
         Cluster::Devnet => String::from("https://api.devnet.solana.com"),
         Cluster::Localnet => String::from("http://0.0.0.0:8899"),
-        Cluster::Custom(cluster) => cluster,
+        Cluster::Custom(url) => url,
     }
 }
 #[derive(Clone, PartialEq, Debug)]
