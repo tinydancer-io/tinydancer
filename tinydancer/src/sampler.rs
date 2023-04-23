@@ -155,7 +155,7 @@ pub async fn request_shreds(
     serde_json::from_str::<GetShredResponse>(&res)
 }
 
-async fn slot_update_loop(
+pub async fn slot_update_loop(
     slot_update_tx: Sender<u64>,
     pub_sub: String,
     status_sampler: Arc<Mutex<ClientStatus>>,
@@ -535,6 +535,7 @@ pub struct GetShredResponse {
     pub result: GetShredResult,
     pub id: i64,
 }
+
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetShredResult {
