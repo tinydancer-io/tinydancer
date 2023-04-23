@@ -31,7 +31,7 @@ use solana_sdk::{
 };
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 use std::{error::Error, ops::Add};
 use std::{
     net::{SocketAddr, UdpSocket},
@@ -40,6 +40,7 @@ use std::{
 use tiny_logger::logs::{debug, error, info};
 use tokio::{
     sync::mpsc::UnboundedSender,
+    sync::{Mutex, MutexGuard},
     task::{JoinError, JoinHandle},
 };
 use tungstenite::{connect, Message};
@@ -56,7 +57,7 @@ pub struct SampleServiceConfig {
     pub cluster: Cluster,
     pub archive_config: ArchiveConfig,
     pub instance: Arc<rocksdb::DB>,
-    pub status_sampler: Arc<Mutex<ClientStatus>>,
+    pub client_status: Arc<Mutex<ClientStatus>>,
     pub sample_qty: usize,
 }
 
@@ -81,13 +82,13 @@ impl ClientService<SampleServiceConfig> for SampleService {
             let (shred_tx, shred_rx) = crossbeam::channel::unbounded();
             let (verified_shred_tx, verified_shred_rx) = crossbeam::channel::unbounded();
 
-            let status_arc = config.status_sampler.clone();
+            let status_arc = config.client_status.clone();
 
             // waits on new slots => triggers shred_update_loop
             threads.push(tokio::spawn(slot_update_loop(
                 slot_update_tx,
                 pub_sub,
-                config.status_sampler,
+                config.client_status,
             )));
 
             // sample shreds from new slot
@@ -158,13 +159,14 @@ pub async fn request_shreds(
 pub async fn slot_update_loop(
     slot_update_tx: Sender<u64>,
     pub_sub: String,
-    status_sampler: Arc<Mutex<ClientStatus>>,
+    client_status: Arc<Mutex<ClientStatus>>,
 ) -> anyhow::Result<()> {
     let result = match connect(Url::parse(pub_sub.as_str()).unwrap()) {
         Ok((socket, _response)) => Some((socket, _response)),
         Err(_) => {
-            let mut status = status_sampler.lock().unwrap();
+            let mut status = client_status.lock().await;
             *status = ClientStatus::Crashed(String::from("Client can't connect to socket"));
+            drop(status);
             None
         }
     };
@@ -318,18 +320,19 @@ async fn shred_update_loop(
     slot_update_rx: Receiver<u64>,
     endpoint: String,
     shred_tx: Sender<(Vec<Option<Shred>>, solana_ledger::shred::Pubkey)>,
-    status_sampler: Arc<Mutex<ClientStatus>>,
+    client_status: Arc<Mutex<ClientStatus>>,
     sample_qty: usize,
 ) -> anyhow::Result<()> {
     loop {
         {
-            let mut status = status_sampler.lock().unwrap();
+            let mut status = client_status.lock().await;
             if let ClientStatus::Crashed(_) = &*status {
                 return Err(anyhow!("Client crashed"));
             } else {
                 *status = ClientStatus::Active(String::from(
                     "Monitoring Tinydancer: Actively Sampling Shreds",
                 ));
+                drop(status)
             }
         }
 

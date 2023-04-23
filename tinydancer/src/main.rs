@@ -46,9 +46,9 @@ use std::{
 use tinydancer::{endpoint, Cluster, TinyDancer, TinyDancerConfig};
 mod macros;
 use colored::Colorize;
+mod consensus;
 mod rpc_wrapper;
 mod sampler;
-mod consensus;
 mod ui;
 
 use anyhow::{anyhow, Result};
@@ -149,7 +149,7 @@ async fn main() -> Result<()> {
             archive_path,
             shred_archive_duration,
             tui_monitor,
-            consensus_mode
+            consensus_mode,
         } => {
             let config_file =
                 get_config_file().map_err(|_| anyhow!("tinydancer config not set"))?;
@@ -234,8 +234,6 @@ async fn main() -> Result<()> {
                 }
             }
             ConfigSubcommands::Set { log_path, cluster } => {
-                // println!("{:?}", fs::create_dir_all("~/.config/tinydancer"));
-
                 let home_path = std::env::var("HOME").unwrap();
                 let tinydancer_dir = home_path + "/.config/tinydancer";
 

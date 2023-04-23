@@ -18,6 +18,17 @@ macro_rules! block_on {
     };
 }
 #[macro_export]
+macro_rules! block_on_async {
+    ($func:expr) => {{
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on($func)
+    }};
+}
+
+#[macro_export]
 macro_rules! try_coerce_shred {
     ($response:expr) => {{
         let shred = if let Some(response) = $response.clone() {
