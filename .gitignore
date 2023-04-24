@@ -4,3 +4,4 @@ tmp/
 .vscode
 db/
 archives/
+.DS_Store

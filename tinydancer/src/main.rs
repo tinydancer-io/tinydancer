@@ -43,10 +43,9 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use tinydancer::{endpoint, Cluster, TinyDancer, TinyDancerConfig};
+use tinydancer::{Cluster, TinyDancer, TinyDancerConfig};
 mod macros;
 use colored::Colorize;
-mod rpc_wrapper;
 mod sampler;
 mod ui;
 

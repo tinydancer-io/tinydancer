@@ -1,4 +1,4 @@
-use crate::tinydancer::{endpoint, ClientService, ClientStatus, Cluster};
+use crate::tinydancer::{ClientService, ClientStatus, Cluster};
 use crate::{convert_to_websocket, send_rpc_call, try_coerce_shred};
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -72,7 +72,7 @@ impl ClientService<SampleServiceConfig> for SampleService {
 
     fn new(config: SampleServiceConfig) -> Self {
         let sampler_handle = tokio::spawn(async move {
-            let rpc_url = endpoint(config.cluster);
+            let rpc_url = config.cluster.endpoint();
             let pub_sub = convert_to_websocket!(rpc_url);
 
             let mut threads = Vec::default();
@@ -110,7 +110,7 @@ impl ClientService<SampleServiceConfig> for SampleService {
             )));
 
             for thread in threads {
-                thread.await;
+                let _ = thread.await;
             }
         });
 

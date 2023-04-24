@@ -10,7 +10,6 @@ use std::{
 // use tokio::time::Duration;
 use crate::{
     block_on,
-    rpc_wrapper::{TransactionService, TransactionServiceConfig},
     sampler::{ArchiveConfig, SampleService, SampleServiceConfig, SHRED_CF},
     ui::{UiConfig, UiService},
 };
@@ -25,6 +24,7 @@ use tiny_logger::logs::info;
 use std::error::Error;
 use tokio::{runtime::Runtime, task::JoinError, try_join};
 // use std::{thread, thread::JoinHandle, time::Duration};
+use solana_rpc_client::rpc_client::RpcClient;
 
 #[async_trait]
 pub trait ClientService<T> {
@@ -39,7 +39,7 @@ pub struct TinyDancer {
     ui_service: Option<UiService>,
     sample_qty: u64,
     config: TinyDancerConfig,
-    transaction_service: TransactionService,
+    rpc: RpcClient,
 }
 
 #[derive(Clone)]
@@ -96,10 +96,7 @@ impl TinyDancer {
         };
         let sample_service = SampleService::new(sample_service_config);
 
-        let transaction_service = TransactionService::new(TransactionServiceConfig {
-            cluster: rpc_endpoint.clone(),
-            db_instance: db.clone(),
-        });
+        let rpc = RpcClient::new(rpc_endpoint.endpoint());
 
         let ui_service = if enable_ui_service || tui_monitor {
             Some(UiService::new(UiConfig {
@@ -117,11 +114,6 @@ impl TinyDancer {
             .await
             .expect("error in sample service thread");
 
-        transaction_service
-            .join()
-            .await
-            .expect("ERROR IN SIMPLE PAYMENT SERVICE");
-
         if let Some(ui_service) = ui_service {
             block_on!(async { ui_service.join().await }, "Ui Service Error");
         }
@@ -138,15 +130,17 @@ pub enum Cluster {
     Custom(String),
 }
 
-pub fn endpoint(cluster: Cluster) -> String {
-    let cluster = cluster;
-    match cluster {
-        Cluster::Mainnet => String::from("https://api.mainnet-beta.solana.com"),
-        Cluster::Devnet => String::from("https://api.devnet.solana.com"),
-        Cluster::Localnet => String::from("http://0.0.0.0:8899"),
-        Cluster::Custom(url) => url,
+impl Cluster {
+    pub fn endpoint(&self) -> String {
+        match self {
+            Cluster::Mainnet => String::from("https://api.mainnet-beta.solana.com"),
+            Cluster::Devnet => String::from("https://api.devnet.solana.com"),
+            Cluster::Localnet => String::from("http://0.0.0.0:8899"),
+            Cluster::Custom(cluster) => cluster.clone(),
+        }
     }
 }
+
 pub enum ClientStatus {
     Initializing(String),
     SearchingForRPCService(String),
