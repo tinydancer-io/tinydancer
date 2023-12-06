@@ -11,6 +11,7 @@ jobs:
   build_and_test:
     name: Build the client
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - uses: actions/checkout@v2
 
@@ -30,6 +31,7 @@ jobs:
   check_and_publish:
     name: Check semver and publish to crates.io
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
