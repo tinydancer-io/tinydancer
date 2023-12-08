@@ -1,3 +1,4 @@
+use crate::block_on_async;
 use crate::sampler::GetShredResponse;
 use crate::tinydancer::{ClientService, ClientStatus, TinyDancer};
 use async_trait::async_trait;
@@ -8,13 +9,14 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use spinoff::{spinners, Color as SpinColor, Spinner};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{any::Any, thread::Thread};
 use std::{fmt, thread::JoinHandle};
 use thiserror::Error;
 use tiny_logger::logs::info;
+use tokio::sync::{Mutex, MutexGuard};
 use tui::layout::Rect;
 use tui::style::{Color, Modifier, Style};
 use tui::text::{Span, Spans};
@@ -225,12 +227,30 @@ impl ClientService<UiConfig> for UiService {
 
                 threads.push(std::thread::spawn(move || loop {
                     sleep(Duration::from_millis(100));
+                    enable_raw_mode();
+                    if crossterm::event::poll(Duration::from_millis(100)).unwrap() {
+                        let ev = crossterm::event::read().unwrap();
+                        if ev
+                            == Event::Key(KeyEvent {
+                                code: KeyCode::Char('c'),
+                                modifiers: KeyModifiers::CONTROL,
+                                kind: KeyEventKind::Press,
+                                state: KeyEventState::NONE,
+                            })
+                        {
+                            let mut status = block_on_async!(client_status.lock());
+                            *status = ClientStatus::ShuttingDown(String::from(
+                                "Shutting Down Gracefully...",
+                            ));
+                            drop(status);
+                            disable_raw_mode();
+                        }
+                    }
+                    let status = block_on_async!(client_status.lock());
 
-                    let status = client_status.lock().unwrap();
                     match &*status {
                         ClientStatus::Active(msg) => {
                             spinner.update(spinners::Dots, msg.clone(), SpinColor::Green);
-                            // sleep(Duration::from_secs(100));
                         }
                         ClientStatus::Initializing(msg) => {
                             spinner.update(spinners::Dots, msg.clone(), SpinColor::Yellow);
@@ -245,27 +265,7 @@ impl ClientService<UiConfig> for UiService {
                         }
                         _ => {}
                     }
-                    Mutex::unlock(status);
-                    enable_raw_mode();
-                    if crossterm::event::poll(Duration::from_millis(100)).unwrap() {
-                        let ev = crossterm::event::read().unwrap();
-
-                        if ev
-                            == Event::Key(KeyEvent {
-                                code: KeyCode::Char('c'),
-                                modifiers: KeyModifiers::CONTROL,
-                                kind: KeyEventKind::Press,
-                                state: KeyEventState::NONE,
-                            })
-                        {
-                            let mut status = client_status.lock().unwrap();
-                            *status = ClientStatus::ShuttingDown(String::from(
-                                "Shutting Down Gracefully...",
-                            ));
-                            Mutex::unlock(status);
-                            disable_raw_mode();
-                        }
-                    }
+                    drop(status);
                 }));
             }
 

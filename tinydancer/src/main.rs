@@ -46,6 +46,7 @@ use std::{
 use tinydancer::{endpoint, Cluster, TinyDancer, TinyDancerConfig};
 mod macros;
 use colored::Colorize;
+mod consensus;
 mod rpc_wrapper;
 mod sampler;
 mod ui;
@@ -85,6 +86,10 @@ pub enum Commands {
         /// Duration after which shreds will be purged
         #[clap(required = false, default_value_t = 10000000)]
         shred_archive_duration: u64,
+
+        /// Run the node in consensus mode
+        #[clap(long, short)]
+        consensus_mode: bool,
     },
     /// Verify the samples for a single slot
     Verify {
@@ -144,6 +149,7 @@ async fn main() -> Result<()> {
             archive_path,
             shred_archive_duration,
             tui_monitor,
+            consensus_mode,
         } => {
             let config_file =
                 get_config_file().map_err(|_| anyhow!("tinydancer config not set"))?;
@@ -152,6 +158,7 @@ async fn main() -> Result<()> {
                 rpc_endpoint: get_cluster(config_file.cluster),
                 sample_qty,
                 tui_monitor,
+                consensus_mode,
                 log_path: config_file.log_path,
                 archive_config: {
                     archive_path
@@ -227,8 +234,6 @@ async fn main() -> Result<()> {
                 }
             }
             ConfigSubcommands::Set { log_path, cluster } => {
-                // println!("{:?}", fs::create_dir_all("~/.config/tinydancer"));
-
                 let home_path = std::env::var("HOME").unwrap();
                 let tinydancer_dir = home_path + "/.config/tinydancer";
 

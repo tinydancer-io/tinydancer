@@ -1,15 +1,12 @@
 //! Sampler struct - incharge of sampling shreds
 // use rayon::prelude::*;
 
-use std::{
-    env,
-    sync::{Arc, Mutex, MutexGuard},
-    thread::Result,
-};
+use std::{env, sync::Arc, thread::Result};
 
 // use tokio::time::Duration;
 use crate::{
     block_on,
+    consensus::{ConsensusService, ConsensusServiceConfig},
     rpc_wrapper::{TransactionService, TransactionServiceConfig},
     sampler::{ArchiveConfig, SampleService, SampleServiceConfig, SHRED_CF},
     ui::{UiConfig, UiService},
@@ -23,7 +20,12 @@ use tiny_logger::logs::info;
 // use log::info;
 // use log4rs;
 use std::error::Error;
-use tokio::{runtime::Runtime, task::JoinError, try_join};
+use tokio::{
+    runtime::Runtime,
+    sync::{Mutex, MutexGuard},
+    task::JoinError,
+    try_join,
+};
 // use std::{thread, thread::JoinHandle, time::Duration};
 
 #[async_trait]
@@ -49,6 +51,7 @@ pub struct TinyDancerConfig {
     pub enable_ui_service: bool,
     pub archive_config: ArchiveConfig,
     pub tui_monitor: bool,
+    pub consensus_mode: bool,
     pub log_path: String,
 }
 
@@ -62,10 +65,8 @@ use std::path::PathBuf;
 impl TinyDancer {
     pub async fn start(config: TinyDancerConfig) -> Result<()> {
         let status = ClientStatus::Initializing(String::from("Starting Up Tinydancer"));
-
         let client_status = Arc::new(Mutex::new(status));
-        let status_sampler = client_status.clone();
-
+        let client_status_ui = client_status.clone();
         let TinyDancerConfig {
             enable_ui_service,
             rpc_endpoint,
@@ -73,9 +74,10 @@ impl TinyDancer {
             tui_monitor,
             log_path,
             archive_config,
+            consensus_mode,
         } = config.clone();
         std::env::set_var("RUST_LOG", "info");
-        tiny_logger::setup_file_with_default(&log_path, "RUST_LOG");
+        // tiny_logger::setup_file_with_default(&log_path, "RUST_LOG");
 
         let mut opts = rocksdb::Options::default();
         opts.create_if_missing(true);
@@ -87,15 +89,6 @@ impl TinyDancer {
             .unwrap();
         let db = Arc::new(db);
 
-        let sample_service_config = SampleServiceConfig {
-            cluster: rpc_endpoint.clone(),
-            archive_config,
-            instance: db.clone(),
-            status_sampler,
-            sample_qty,
-        };
-        let sample_service = SampleService::new(sample_service_config);
-
         let transaction_service = TransactionService::new(TransactionServiceConfig {
             cluster: rpc_endpoint.clone(),
             db_instance: db.clone(),
@@ -103,20 +96,46 @@ impl TinyDancer {
 
         let ui_service = if enable_ui_service || tui_monitor {
             Some(UiService::new(UiConfig {
-                client_status,
+                client_status: client_status_ui,
                 enable_ui_service,
                 tui_monitor,
             }))
         } else {
             None
         };
+        // run the sampling service
+        if !consensus_mode {
+            let sample_service_config = SampleServiceConfig {
+                cluster: rpc_endpoint.clone(),
+                archive_config: archive_config.clone(),
+                instance: db.clone(),
+                client_status: client_status.clone(),
+                sample_qty,
+            };
 
-        // run
-        sample_service
-            .join()
-            .await
-            .expect("error in sample service thread");
+            let sample_service = SampleService::new(sample_service_config);
+            sample_service
+                .join()
+                .await
+                .expect("error in sample service thread");
+        }
+        if consensus_mode {
+            let consensus_service_config = ConsensusServiceConfig {
+                cluster: rpc_endpoint.clone(),
+                archive_config,
+                instance: db.clone(),
+                client_status,
+                sample_qty,
+            };
 
+            let consensus_service = ConsensusService::new(consensus_service_config);
+
+            // run the consensus service
+            consensus_service
+                .join()
+                .await
+                .expect("error in consensus service thread");
+        }
         transaction_service
             .join()
             .await
@@ -147,6 +166,7 @@ pub fn endpoint(cluster: Cluster) -> String {
         Cluster::Custom(url) => url,
     }
 }
+#[derive(Clone, PartialEq, Debug)]
 pub enum ClientStatus {
     Initializing(String),
     SearchingForRPCService(String),
