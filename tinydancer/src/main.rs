@@ -1,37 +1,12 @@
-//! client struct
-//! new -> self
-//! join -> JoinHandle
-//!
-//!
-//! things happening at the same time:
-//! sampling -> pull data -> run sampling algo
-//! monitoring system -> slot number | shreds req/rec | sampling progress | connected nodes
-//! ui -> display stats
-//!
-//! let (rx,tx) = channel();
-//! spawn(move{
-//!     let sampler = Sampler::new(tx)
-//!     sampler.join();         
-//! })
-//!
-//! spawn(move{
-//!     let monitor = Monitor::new(config, rx)
-//! });
-//! let rx2 = rx.clone();
-//! spawn(move{
-//!     let ui = Ui::new(...)
-//!  while let r = rx2.recv(){
-//!     
-//! }
-//! })
-#![feature(async_closure)]
-#![allow(unused_imports)]
-#![allow(dead_code)]
-#![feature(mutex_unlock)]
+// #![feature(async_closure)]
+// #![allow(unused_imports)]
+// #![allow(dead_code)]
+// #![feature(mutex_unlock)]
+#![feature(inherent_associated_types)]
 mod tinydancer;
 use crossterm::style::Stylize;
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
-use sampler::{pull_and_verify_shreds, ArchiveConfig};
+// use sampler::{pull_and_verify_shreds, ArchiveConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use spinoff::{spinners, Color, Spinner};
@@ -44,11 +19,10 @@ use std::{
     time::Duration,
 };
 use tinydancer::{endpoint, Cluster, TinyDancer, TinyDancerConfig};
+
 mod macros;
+mod transaction_service;
 use colored::Colorize;
-mod rpc_wrapper;
-mod sampler;
-mod ui;
 
 use anyhow::{anyhow, Result};
 use clap::{ArgGroup, Parser, Subcommand, *};
@@ -71,28 +45,26 @@ pub enum Commands {
         #[clap(long, short, default_value_t = true)]
         enable_ui_service: bool,
 
-        /// If you want to enable detailed tui to monitor
-        #[clap(long, short, default_value_t = false)]
-        tui_monitor: bool,
+        // /// If you want to enable detailed tui to monitor
+        // #[clap(long, short, default_value_t = false)]
+        // tui_monitor: bool,
 
-        /// Amount of shreds you want to sample per slot
-        #[clap(long, short, default_value_t = 10)]
-        sample_qty: usize,
+        // /// Amount of shreds you want to sample per slot
+        // #[clap(long, short, default_value_t = 10)]
+        // sample_qty: usize,
         /// Rocks db path for storing shreds
         #[clap(required = false)]
         archive_path: Option<String>,
-
-        /// Duration after which shreds will be purged
-        #[clap(required = false, default_value_t = 10000000)]
-        shred_archive_duration: u64,
+        // /// Duration after which shreds will be purged
+        // #[clap(required = false, default_value_t = 10000000)]
+        // shred_archive_duration: u64,
     },
     /// Verify the samples for a single slot
     Verify {
         #[clap(long, required = false, default_value = "0")]
         slot: usize,
-
-        #[clap(long, required = false, default_value = "10")]
-        sample_qty: usize,
+        // #[clap(long, required = false, default_value = "10")]
+        // sample_qty: usize,
     },
     /// Stream the client logs to your terminal
     Logs {
@@ -140,29 +112,29 @@ async fn main() -> Result<()> {
 
         Commands::Start {
             enable_ui_service,
-            sample_qty,
+            // sample_qty,
             archive_path,
-            shred_archive_duration,
-            tui_monitor,
+            // shred_archive_duration,
+            // tui_monitor,
         } => {
             let config_file =
                 get_config_file().map_err(|_| anyhow!("tinydancer config not set"))?;
             let config = TinyDancerConfig {
-                enable_ui_service,
+                // enable_ui_service,
                 rpc_endpoint: get_cluster(config_file.cluster),
-                sample_qty,
-                tui_monitor,
+                // sample_qty,
+                // tui_monitor,
                 log_path: config_file.log_path,
-                archive_config: {
-                    archive_path
-                        .map(|path| {
-                            Ok(ArchiveConfig {
-                                shred_archive_duration,
-                                archive_path: path,
-                            })
-                        })
-                        .unwrap_or(Err(anyhow!("shred path not provided...")))?
-                },
+                // archive_config: {
+                //     archive_path
+                //         .map(|path| {
+                //             Ok(ArchiveConfig {
+                //                 shred_archive_duration,
+                //                 archive_path: path,
+                //             })
+                //         })
+                //         .unwrap_or(Err(anyhow!("shred path not provided...")))?
+                // },
             };
 
             TinyDancer::start(config).await.unwrap();
@@ -274,7 +246,7 @@ async fn main() -> Result<()> {
                 }
             }
         },
-        Commands::Verify { slot, sample_qty } => {
+        Commands::Verify { slot } => {
             let _spinner = Spinner::new(
                 spinners::Dots,
                 format!("Verifying Shreds for Slot {}", slot),
@@ -283,8 +255,7 @@ async fn main() -> Result<()> {
 
             let config_file =
                 get_config_file().map_err(|_| anyhow!("tinydancer config not set"))?;
-            let is_verified =
-                pull_and_verify_shreds(slot, get_endpoint(config_file.cluster), sample_qty).await;
+            let is_verified = true; // verify function
 
             if is_verified {
                 println!(

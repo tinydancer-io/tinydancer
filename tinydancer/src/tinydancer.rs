@@ -10,9 +10,7 @@ use std::{
 // use tokio::time::Duration;
 use crate::{
     block_on,
-    rpc_wrapper::{TransactionService, TransactionServiceConfig},
-    sampler::{ArchiveConfig, SampleService, SampleServiceConfig, SHRED_CF},
-    ui::{UiConfig, UiService},
+    transaction_service::{TransactionService, TransactionServiceConfig},
 };
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -35,9 +33,6 @@ pub trait ClientService<T> {
 }
 
 pub struct TinyDancer {
-    sample_service: SampleService,
-    ui_service: Option<UiService>,
-    sample_qty: u64,
     config: TinyDancerConfig,
     transaction_service: TransactionService,
 }
@@ -45,10 +40,7 @@ pub struct TinyDancer {
 #[derive(Clone)]
 pub struct TinyDancerConfig {
     pub rpc_endpoint: Cluster,
-    pub sample_qty: usize,
-    pub enable_ui_service: bool,
-    pub archive_config: ArchiveConfig,
-    pub tui_monitor: bool,
+    // pub archive_config: ArchiveConfig,
     pub log_path: String,
 }
 
@@ -67,12 +59,9 @@ impl TinyDancer {
         let status_sampler = client_status.clone();
 
         let TinyDancerConfig {
-            enable_ui_service,
             rpc_endpoint,
-            sample_qty,
-            tui_monitor,
             log_path,
-            archive_config,
+            // archive_config,
         } = config.clone();
         std::env::set_var("RUST_LOG", "info");
         tiny_logger::setup_file_with_default(&log_path, "RUST_LOG");
@@ -83,48 +72,23 @@ impl TinyDancer {
         opts.create_missing_column_families(true);
 
         // setup db
-        let db = rocksdb::DB::open_cf(&opts, archive_config.clone().archive_path, vec![SHRED_CF])
-            .unwrap();
-        let db = Arc::new(db);
-
-        let sample_service_config = SampleServiceConfig {
-            cluster: rpc_endpoint.clone(),
-            archive_config,
-            instance: db.clone(),
-            status_sampler,
-            sample_qty,
-        };
-        let sample_service = SampleService::new(sample_service_config);
+        // let db = rocksdb::DB::open_cf(&opts, archive_config.clone().archive_path, vec![SHRED_CF])
+        //     .unwrap();
+        // let db = Arc::new(db);
 
         let transaction_service = TransactionService::new(TransactionServiceConfig {
             cluster: rpc_endpoint.clone(),
-            db_instance: db.clone(),
+            // db_instance: db.clone(),
         });
-
-        let ui_service = if enable_ui_service || tui_monitor {
-            Some(UiService::new(UiConfig {
-                client_status,
-                enable_ui_service,
-                tui_monitor,
-            }))
-        } else {
-            None
-        };
-
-        // run
-        sample_service
-            .join()
-            .await
-            .expect("error in sample service thread");
 
         transaction_service
             .join()
             .await
             .expect("ERROR IN SIMPLE PAYMENT SERVICE");
 
-        if let Some(ui_service) = ui_service {
-            block_on!(async { ui_service.join().await }, "Ui Service Error");
-        }
+        // if let Some(ui_service) = ui_service {
+        //     block_on!(async { ui_service.join().await }, "Ui Service Error");
+        // }
 
         Ok(())
     }
