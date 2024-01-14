@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use crate::{
     send_rpc_call,
@@ -8,6 +8,7 @@ use crate::{
 use anyhow::anyhow;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use solana_sdk::signature::{Signable, Signature};
 use tokio::{sync::Mutex, task::JoinHandle};
 
 pub struct TransactionService {
@@ -19,6 +20,7 @@ pub struct TransactionServiceConfig {
     pub cluster: Cluster,
     pub validator_set: Arc<Mutex<Vec<(String, u64)>>>,
     pub slot: u64,
+    pub current_epoch: u64,
 }
 
 #[async_trait]
@@ -43,6 +45,14 @@ impl ClientService<TransactionServiceConfig> for TransactionService {
             println!("keys: {:?}", vote_pubkeys);
             let vote_signatures = request_vote_signatures(config.slot, rpc_url, vote_pubkeys).await;
             println!("votes: {:?}", vote_signatures);
+            let signatures: Vec<Signature> = vote_signatures
+                .unwrap()
+                .result
+                .vote_signature
+                .iter()
+                .map(|sig| Signature::from_str(sig.as_str()))
+                .flatten()
+                .collect();
         });
         Self { handler }
     }

@@ -36,6 +36,7 @@ pub struct TinyDancer {
     config: TinyDancerConfig,
     transaction_service: TransactionService,
     epoch_validator_set: Vec<(String, u64)>,
+    // current_epoch: u64
 }
 
 #[derive(Clone)]
@@ -61,6 +62,9 @@ impl TinyDancer {
         let client_status = Arc::new(Mutex::new(status));
         // let status_sampler = client_status.clone();
 
+        let validator_set =
+            read_validator_set(&config.validator_set_path).map_err(|e| anyhow!(e.to_string()))?;
+        let current_epoch = validator_set.epoch;
         let TinyDancerConfig {
             rpc_endpoint,
             log_path,
@@ -74,9 +78,6 @@ impl TinyDancer {
         opts.create_if_missing(true);
         opts.set_error_if_exists(false);
         opts.create_missing_column_families(true);
-
-        let validator_set =
-            read_validator_set(&config.validator_set_path).map_err(|e| anyhow!(e.to_string()))?;
 
         let validator_set = match config.rpc_endpoint {
             Cluster::Mainnet => validator_set.mainnet_beta,
@@ -96,6 +97,7 @@ impl TinyDancer {
             // db_instance: db.clone(),
             validator_set,
             slot,
+            current_epoch,
         });
 
         transaction_service

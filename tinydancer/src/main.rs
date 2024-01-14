@@ -328,6 +328,7 @@ pub struct ConfigSchema {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct ValidatorSet {
+    pub epoch: u64,
     #[serde(rename = "mainnet-beta")]
     pub mainnet_beta: Vec<(String, u64)>,
     pub testnet: Vec<(String, u64)>,
