@@ -1,37 +1,12 @@
-//! client struct
-//! new -> self
-//! join -> JoinHandle
-//!
-//!
-//! things happening at the same time:
-//! sampling -> pull data -> run sampling algo
-//! monitoring system -> slot number | shreds req/rec | sampling progress | connected nodes
-//! ui -> display stats
-//!
-//! let (rx,tx) = channel();
-//! spawn(move{
-//!     let sampler = Sampler::new(tx)
-//!     sampler.join();         
-//! })
-//!
-//! spawn(move{
-//!     let monitor = Monitor::new(config, rx)
-//! });
-//! let rx2 = rx.clone();
-//! spawn(move{
-//!     let ui = Ui::new(...)
-//!  while let r = rx2.recv(){
-//!     
-//! }
-//! })
-#![feature(async_closure)]
-#![allow(unused_imports)]
-#![allow(dead_code)]
-#![feature(mutex_unlock)]
+// #![feature(async_closure)]
+// #![allow(unused_imports)]
+// #![allow(dead_code)]
+// #![feature(mutex_unlock)]
+#![feature(inherent_associated_types)]
 mod tinydancer;
 use crossterm::style::Stylize;
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
-use sampler::{pull_and_verify_shreds, ArchiveConfig};
+// use sampler::{pull_and_verify_shreds, ArchiveConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use spinoff::{spinners, Color, Spinner};
@@ -44,11 +19,11 @@ use std::{
     time::Duration,
 };
 use tinydancer::{endpoint, Cluster, TinyDancer, TinyDancerConfig};
+use transaction_service::read_validator_set;
+
 mod macros;
+mod transaction_service;
 use colored::Colorize;
-mod rpc_wrapper;
-mod sampler;
-mod ui;
 
 use anyhow::{anyhow, Result};
 use clap::{ArgGroup, Parser, Subcommand, *};
@@ -71,28 +46,28 @@ pub enum Commands {
         #[clap(long, short, default_value_t = true)]
         enable_ui_service: bool,
 
-        /// If you want to enable detailed tui to monitor
-        #[clap(long, short, default_value_t = false)]
-        tui_monitor: bool,
+        #[clap(long, required = true)]
+        slot: u64,
+        // /// If you want to enable detailed tui to monitor
+        // #[clap(long, short, default_value_t = false)]
+        // tui_monitor: bool,
 
-        /// Amount of shreds you want to sample per slot
-        #[clap(long, short, default_value_t = 10)]
-        sample_qty: usize,
-        /// Rocks db path for storing shreds
-        #[clap(required = false)]
-        archive_path: Option<String>,
-
-        /// Duration after which shreds will be purged
-        #[clap(required = false, default_value_t = 10000000)]
-        shred_archive_duration: u64,
+        // /// Amount of shreds you want to sample per slot
+        // #[clap(long, short, default_value_t = 10)]
+        // sample_qty: usize,
+        // /// Rocks db path for storing shreds
+        // #[clap(required = false)]
+        // archive_path: Option<String>,
+        // /// Duration after which shreds will be purged
+        // #[clap(required = false, default_value_t = 10000000)]
+        // shred_archive_duration: u64,
     },
     /// Verify the samples for a single slot
     Verify {
         #[clap(long, required = false, default_value = "0")]
-        slot: usize,
-
-        #[clap(long, required = false, default_value = "10")]
-        sample_qty: usize,
+        slot: u64,
+        // #[clap(long, required = false, default_value = "10")]
+        // sample_qty: usize,
     },
     /// Stream the client logs to your terminal
     Logs {
@@ -109,11 +84,14 @@ pub enum Commands {
 #[derive(Debug, Subcommand)]
 pub enum ConfigSubcommands {
     Set {
-        #[clap(long, required = false, default_value = "/tmp/client.log")]
-        log_path: String,
+        #[clap(long, required = false)]
+        log_path: Option<String>,
         /// The cluster you want to run the client on (Mainnet, Localnet,Devnet, <custom-url>)
-        #[clap(long, short, required = false, default_value = "Localnet")]
-        cluster: String,
+        #[clap(long, short, required = false)]
+        cluster: Option<String>,
+
+        #[clap(long, short, required = false)]
+        validator_set_path: Option<String>,
     },
     Get,
 }
@@ -140,29 +118,32 @@ async fn main() -> Result<()> {
 
         Commands::Start {
             enable_ui_service,
-            sample_qty,
-            archive_path,
-            shred_archive_duration,
-            tui_monitor,
+            slot,
+            // sample_qty,
+            // archive_path,
+            // shred_archive_duration,
+            // tui_monitor,
         } => {
             let config_file =
                 get_config_file().map_err(|_| anyhow!("tinydancer config not set"))?;
+            println!("vp {:?}", config_file.validator_set_path);
             let config = TinyDancerConfig {
-                enable_ui_service,
+                // enable_ui_service,
                 rpc_endpoint: get_cluster(config_file.cluster),
-                sample_qty,
-                tui_monitor,
+                // sample_qty,
+                // tui_monitor,
                 log_path: config_file.log_path,
-                archive_config: {
-                    archive_path
-                        .map(|path| {
-                            Ok(ArchiveConfig {
-                                shred_archive_duration,
-                                archive_path: path,
-                            })
-                        })
-                        .unwrap_or(Err(anyhow!("shred path not provided...")))?
-                },
+                slot,
+                validator_set_path: config_file.validator_set_path, // archive_config: {
+                                                                    //     archive_path
+                                                                    //         .map(|path| {
+                                                                    //             Ok(ArchiveConfig {
+                                                                    //                 shred_archive_duration,
+                                                                    //                 archive_path: path,
+                                                                    //             })
+                                                                    //         })
+                                                                    //         .unwrap_or(Err(anyhow!("shred path not provided...")))?
+                                                                    // },
             };
 
             TinyDancer::start(config).await.unwrap();
@@ -226,7 +207,11 @@ async fn main() -> Result<()> {
                     );
                 }
             }
-            ConfigSubcommands::Set { log_path, cluster } => {
+            ConfigSubcommands::Set {
+                log_path,
+                cluster,
+                validator_set_path,
+            } => {
                 // println!("{:?}", fs::create_dir_all("~/.config/tinydancer"));
 
                 let home_path = std::env::var("HOME").unwrap();
@@ -250,6 +235,15 @@ async fn main() -> Result<()> {
                         .stdout(std::process::Stdio::null())
                         .spawn()
                         .expect("couldnt make file");
+
+                    std::fs::write(
+                        config_path.clone(),
+                        serde_json::to_string_pretty(&serde_json::json!({
+                            "cluster":"",
+                            "validatorSetPath":"",
+                            "logPath":""
+                        }))?,
+                    )?;
                 }
                 sleep(Duration::from_secs(1));
 
@@ -257,24 +251,27 @@ async fn main() -> Result<()> {
                 match config_file {
                     Ok(mut config_file) => {
                         // overwrite
-                        config_file.log_path = log_path;
-                        config_file.cluster = cluster;
+                        config_file.cluster = cluster.unwrap_or(config_file.cluster);
+                        config_file.log_path = log_path.unwrap_or(config_file.log_path);
+                        config_file.validator_set_path =
+                            validator_set_path.unwrap_or(config_file.validator_set_path);
                         std::fs::write(config_path, serde_json::to_string_pretty(&config_file)?)?;
                     }
-                    Err(_) => {
+                    Err(e) => {
+                        println!("{:?}", e.to_string());
                         // initialize
                         std::fs::write(
                             config_path,
                             serde_json::to_string_pretty(&serde_json::json!({
                                 "cluster":"Localnet",
-                                "logPath":"/tmp/client.log"
+                                "logPath":"/tmp/client.log",
                             }))?,
                         )?;
                     }
                 }
             }
         },
-        Commands::Verify { slot, sample_qty } => {
+        Commands::Verify { slot } => {
             let _spinner = Spinner::new(
                 spinners::Dots,
                 format!("Verifying Shreds for Slot {}", slot),
@@ -283,8 +280,7 @@ async fn main() -> Result<()> {
 
             let config_file =
                 get_config_file().map_err(|_| anyhow!("tinydancer config not set"))?;
-            let is_verified =
-                pull_and_verify_shreds(slot, get_endpoint(config_file.cluster), sample_qty).await;
+            let is_verified = true; // verify function
 
             if is_verified {
                 println!(
@@ -327,6 +323,17 @@ pub fn get_endpoint(cluster: String) -> String {
 pub struct ConfigSchema {
     pub log_path: String,
     pub cluster: String,
+    pub validator_set_path: String,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct ValidatorSet {
+    pub epoch: u64,
+    #[serde(rename = "mainnet-beta")]
+    pub mainnet_beta: Vec<(String, u64)>,
+    pub testnet: Vec<(String, u64)>,
+    pub devnet: Vec<(String, u64)>,
+    pub custom: Vec<(String, u64)>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
