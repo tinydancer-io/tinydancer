@@ -1,14 +1,21 @@
 use std::{str::FromStr, sync::Arc};
 
 use crate::{
-    send_rpc_call,
+    datapoint_valid_signature, send_rpc_call,
     tinydancer::{endpoint, ClientService, Cluster},
     ValidatorSet,
 };
 use anyhow::anyhow;
 use async_trait::async_trait;
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
-use solana_sdk::signature::{Signable, Signature};
+use solana_sdk::{
+    pubkey::Pubkey,
+    signature::{Signable, Signature},
+    vote::program::ID as VOTE_PROGRAM_ID,
+};
+use std::collections::HashMap;
+use tiny_logger::logs::info;
 use tokio::{sync::Mutex, task::JoinHandle};
 
 pub struct TransactionService {
@@ -31,6 +38,8 @@ impl ClientService<TransactionServiceConfig> for TransactionService {
         // let validator_set = Arc::new(
         //     read_validator_set(&config.validator_set_path).unwrap_or(ValidatorSet::default()),
         // );
+        let mut verified_signatures: HashMap<Pubkey, (solana_sdk::message::Message, Signature)> =
+            HashMap::new();
         let validator_set = config.validator_set;
         // let slot = config.slot;
 
@@ -42,10 +51,11 @@ impl ClientService<TransactionServiceConfig> for TransactionService {
                 .iter()
                 .map(|item| item.0.clone())
                 .collect();
-            println!("keys: {:?}", vote_pubkeys);
+            // println!("keys: {:?}", vote_pubkeys);
             let vote_signatures = request_vote_signatures(config.slot, rpc_url, vote_pubkeys).await;
-            println!("votes: {:?}", vote_signatures);
+            // println!("votes: {:?}", vote_signatures);
             let signatures: Vec<Signature> = vote_signatures
+                .as_ref()
                 .unwrap()
                 .result
                 .vote_signature
@@ -53,6 +63,47 @@ impl ClientService<TransactionServiceConfig> for TransactionService {
                 .map(|sig| Signature::from_str(sig.as_str()))
                 .flatten()
                 .collect();
+            let vote_messages: Vec<solana_sdk::message::Message> = vote_signatures
+                .unwrap()
+                .result
+                .vote_messages
+                .iter()
+                .map(|raw_message| bincode::deserialize(raw_message.as_slice()).unwrap())
+                .collect();
+            let vote_pair: Vec<(&Signature, &solana_sdk::message::Message)> =
+                signatures.iter().zip(vote_messages.iter()).collect();
+            //println!("pairs: {:?}", vote_pair);
+            for (signature, message) in vote_pair {
+                let message_pubkey = message.account_keys[0];
+                assert!(
+                    message.account_keys.contains(&VOTE_PROGRAM_ID),
+                    "This txn is not a vote txn"
+                );
+                let validator_set_w = validator_set.lock().await;
+                let maybe_trusted_pubkey =
+                    validator_set_w
+                        .iter()
+                        .find(|(validator_key, active_stake)| {
+                            *validator_key == message_pubkey.to_string()
+                        });
+                match maybe_trusted_pubkey {
+                    Some(key) => {
+                        let validator_pubkey = Pubkey::from_str(key.0.as_str()).unwrap();
+                        let is_signature_valid = signature.verify(
+                            validator_pubkey.to_bytes().as_slice(),
+                            message.serialize().as_slice(),
+                        );
+                        if is_signature_valid {
+                            verified_signatures
+                                .insert(validator_pubkey, (message.clone(), signature.clone()));
+                            datapoint_valid_signature!(validator_pubkey, signature);
+                        } else {
+                            println!("{:?} is not valid", key);
+                        }
+                    }
+                    None => panic!("not a trusted validator: {:?}", message_pubkey),
+                }
+            }
         });
         Self { handler }
     }
@@ -107,4 +158,5 @@ pub struct GetVoteSignaturesResponse {
 #[serde(rename_all = "camelCase")]
 pub struct GetVoteSignaturesResult {
     pub vote_signature: Vec<String>,
+    pub vote_messages: Vec<Vec<u8>>,
 }
