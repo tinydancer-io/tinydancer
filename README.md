@@ -19,8 +19,19 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 Note: For Windows download rustup from this [link](https://forge.rust-lang.org/infra/other-installation-methods.html#other-ways-to-install-rustup)
 
 **Configure Toolchain**
+
+This repo pins the required Rust toolchain in `rust-toolchain.toml`
+(`nightly-2022-11-02`). `rustup` installs and selects it automatically on the
+first `cargo` invocation — no manual `rustup default` needed.
+
+The pin is required: `tinydancer` uses nightly-only feature gates
+(`async_closure`, `mutex_unlock`) that newer nightlies have removed, so a current
+toolchain will not compile it.
+
+**Linux system dependencies** (Ubuntu/Debian)
 ```
-rustup default nightly
+sudo apt-get install -y build-essential pkg-config libssl-dev libudev-dev \
+  zlib1g-dev llvm clang cmake make libprotobuf-dev protobuf-compiler
 ```
 
 **Build and Add to Path**
@@ -29,7 +40,7 @@ cargo b -r && cp ./target/release/tinydancer ~/.local/bin/
 ```
 **Or Install Using Cargo**
 ```
-cargo install --git https://github.com/tinydancer-io/half-baked-client tinydancer
+cargo install --git https://github.com/tinydancer-io/tinydancer tinydancer
 ```
 **Confirm Installation**
 ```

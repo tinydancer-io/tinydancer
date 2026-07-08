@@ -1,51 +1,54 @@
+name: Build the client
+
 on:
   push:
-    branch: ["master"]
-
-name: Publish to crates.io
-
-env:
-  CRATES_DEPLOY: false
+    branches: ["master", "fix/build-and-onboarding"]
+  pull_request:
+  workflow_dispatch:
 
 jobs:
-  build_and_test:
+  build:
     name: Build the client
-    runs-on: ubuntu-latest
-    environment: dev
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - name: Install Nightly toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libssl-dev libudev-dev \
+            zlib1g-dev llvm clang cmake make libprotobuf-dev protobuf-compiler
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
-          toolchain: nightly
-          override: true
+          toolchain: nightly-2022-11-02
 
-      - run: rustup toolchain list
-      - uses: actions-rs/cargo@v1
+      - name: Cargo build cache
+        uses: actions/cache@v4
         with:
-          command: build
-          args: --release --all-features
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-  check_and_publish:
-    name: Check semver and publish to crates.io
-    runs-on: ubuntu-latest
-    environment: dev
+      - name: Build release
+        run: cargo build --release --all-features
+
+  # Publishing to crates.io is a maintainer action and is intentionally
+  # disabled here; kept for reference.
+  publish:
+    name: Publish to crates.io (disabled)
+    if: false
+    runs-on: ubuntu-22.04
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install Nightly toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-
-      - name: Publish to crates.io
-        if: "contains(${{ env.CRATES_DEPLOY }},'true')"
+          toolchain: nightly-2022-11-02
+      - name: Publish
         run: cargo publish -p tinydancer --token ${CRATES_TOKEN} --no-verify
         env:
-          CRATES_DEPLOY: ${{ secrets.CRATES_DEPLOY }}
           CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
